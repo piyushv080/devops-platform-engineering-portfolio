@@ -22,6 +22,10 @@
           - alert_payload.event_id | default('') | length > 0
         fail_msg: Refusing an incomplete, non-error, or non-allow-listed event.
 
+    - name: Save the event for the remediation play
+      ansible.builtin.set_fact:
+        remediation_alert_event: "{{ alert_event }}"
+
     - name: Require ServiceNow credential values before changing the target
       ansible.builtin.assert:
         that:
@@ -93,7 +97,7 @@
           Content-Type: application/json
         body_format: json
         body:
-          work_notes: "Automation received {{ alert_payload.alertname }} for {{ alert_payload.target }} (event {{ alert_payload.event_id }}). AWX job {{ lookup('env', 'AWX_JOB_ID') | default('manual', true) }} is starting the approved demo remediation."
+          work_notes: "Ansible AWX Job ID: {{ awx_job_id | default('unknown', true) }}. Automation received {{ alert_payload.alertname }} for {{ alert_payload.target }} (event {{ alert_payload.event_id }}). The approved demo remediation is starting."
         status_code: 200
       no_log: true
 
@@ -106,7 +110,7 @@
   gather_facts: false
   become: true
   vars:
-    alert_event: "{{ hostvars['localhost']['alert_event'] }}"
+    alert_event: "{{ hostvars['localhost']['remediation_alert_event'] }}"
     snow_incident_sys_id: "{{ hostvars['localhost']['snow_incident_sys_id'] }}"
     snow_incident_number: "{{ hostvars['localhost']['snow_incident_number'] }}"
     snow_url: "{{ lookup('env', 'SNOW_INSTANCE_URL') | regex_replace('/+$', '') }}"
@@ -146,7 +150,7 @@
 
         - name: Resolve incident after successful independent verification
           ansible.builtin.uri:
-            url: "{{ snow_url }}/api/now/table/incident/{{ snow_incident_sys_id }}"
+            url: "{{ snow_url }}/api/now/table/incident/{{ snow_incident_sys_id }}?sysparm_input_display_value=true"
             method: PATCH
             user: "{{ snow_user }}"
             password: "{{ snow_password }}"
@@ -156,8 +160,8 @@
               Content-Type: application/json
             body_format: json
             body:
-              state: "6"
-              close_code: "Solved (Work Around)"
+              state: "Resolved"
+              close_code: "Resolved by caller"
               close_notes: "AWX restored the compliant demo page and independently verified HTTP 200. Event {{ alert_event.payload.event_id }}; incident {{ snow_incident_number }}."
               work_notes: "Automated remediation succeeded. The disposable Nginx service returned the expected compliant page after repair."
             status_code: 200

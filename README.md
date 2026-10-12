@@ -1,6 +1,6 @@
 # Event-driven incident remediation lab
 
-Standalone lab project at the repository root. It uses a generic monitoring webhook, an Ansible Rulebook listener, the AWX instance in `enterprise-ops-orchestrator/`, and a disposable Nginx target. An AWX job creates a ServiceNow incident, repairs the target, verifies it, and updates the incident.
+This project demonstrates event-driven incident remediation using a monitoring webhook, an Ansible Rulebook listener, AWX, a disposable Nginx target, and a ServiceNow developer instance. An alert starts a job that records an incident, repairs the target, verifies recovery, and updates the incident.
 
 ## Flow
 
@@ -23,9 +23,8 @@ flowchart LR
     subgraph AWX[AWX on Kubernetes]
         API[AWX Controller API]
         JT[Incident Remediation<br/>Job Template]
-        EE[Enterprise Ops<br/>Execution Environment]
+        EE[AWX execution environment]
         PROJECT[Synced Git project<br/>playbook + inventory]
-        AUDIT[Optional scheduled<br/>baseline audit template]
     end
 
     SN[ServiceNow PDI<br/>Incident Table API]
@@ -44,11 +43,65 @@ flowchart LR
     EE -->|verified: resolve + work notes| SN
     EE -->|repair/check failed: leave open + note| SN
 
-    AUDIT -->|scheduled HTTP check| TARGET
-    AUDIT -->|drift webhook| WEBHOOK
 ```
 
-The demo monitor polls the disposable Nginx page and posts an alert when it detects drift. A real monitoring product can replace it by posting a mapped alert to the same webhook. The rulebook listener validates the alert shape and launches the AWX job through the Controller API. The AWX playbook independently validates and allow-lists the target, records the incident before remediation, then resolves it only after the repaired page passes an HTTP check. If repair or verification fails, it records the failure and leaves the incident open. The optional scheduled audit is a separate AWX job that posts to the same webhook when it detects drift.
+The demo monitor polls the disposable Nginx page and posts an alert when it detects drift. A real monitoring product can replace it by posting a mapped alert to the same webhook. The rulebook listener matches the alert and launches the AWX job through the Controller API. The playbook validates and allow-lists the target, records the incident before remediation, then resolves it only after the repaired page passes an HTTP check. If repair or verification fails, it records the failure and leaves the incident open.
+
+## Video walkthrough: 2–3 minutes
+
+Keep the video focused on the event-to-recovery flow. AWX is the automation engine in this story; the repository and platform setup that hosts AWX do not need a separate explanation.
+
+### Prepare the demo
+
+1. Start the disposable target and confirm the compliant page is available:
+
+   ```bash
+   cd ~/pivanta.org/event-driven-remediation
+   docker compose up -d
+   curl -fsS http://localhost:8081/ | grep 'Pivanta Event Remediation Demo - compliant'
+   ```
+
+2. Start the Rulebook webhook listener by following [Run the event listener](#3-run-the-event-listener). Keep that terminal open.
+3. Open `http://localhost:8081/`, the AWX Job Template and recent job output, and the ServiceNow incident list in your browser. Arrange the windows so you can switch between them quickly.
+4. Start the monitor in another terminal:
+
+   ```bash
+   cd ~/pivanta.org/event-driven-remediation
+   source .venv/bin/activate
+   python monitor/demo_monitor.py
+   ```
+
+5. Start your screen recorder. Hide terminals that contain tokens or credential values. Avoid showing credential forms or private-key files.
+
+### Record the successful event
+
+1. Show the architecture diagram above and briefly trace the arrows from monitor to incident and back to the recovered service.
+2. Introduce reversible drift in the disposable target:
+
+   ```bash
+   bash scripts/introduce-drift.sh
+   ```
+
+3. Show the monitor log reporting a drift alert. Switch to AWX and show the automatically launched `Incident Remediation - Demo Nginx` job.
+4. In the job output, show the key stages: alert validation, incident lookup/create, detection work note, SSH page repair, independent HTTP check, and incident resolution.
+5. Show the restored page at `http://localhost:8081/` and the ServiceNow incident work notes/resolution information.
+6. End with the outcome: the alert triggered the workflow, the service was verified healthy, and the incident records the result.
+
+### Narration script
+
+Read this while showing the corresponding screen. The timing is a guide; pause briefly between screens.
+
+| Time | Show | Narration |
+|---|---|---|
+| 0:00–0:20 | Architecture diagram | “This is an event-driven remediation lab. A monitor watches a disposable web service. When it detects drift, it sends an alert to an Ansible Rulebook webhook. A matching event launches an AWX job, which coordinates the repair and incident update.” |
+| 0:20–0:40 | Compliant page, then run `introduce-drift.sh` | “The Nginx container starts with a known-good page. I’m introducing a small, reversible change to simulate a service problem. The monitor detects that the expected page content is missing and sends an error event.” |
+| 0:40–1:00 | Monitor output, Rulebook listener, AWX job | “The rulebook accepts firing error alerts for the allowed demo target and passes the event to AWX. The job validates the event again and looks for an active incident correlated to this alert, which helps avoid duplicate incidents.” |
+| 1:00–1:25 | AWX output and ServiceNow work notes | “AWX creates or reuses the ServiceNow incident and records a detection note before changing the target. That gives the response an incident record and an audit trail.” |
+| 1:25–1:50 | AWX repair and verification tasks | “The job connects to the disposable target over SSH, restores the known-good page, and then checks the service independently over HTTP. The incident is resolved only after that verification passes.” |
+| 1:50–2:10 | ServiceNow incident and restored page | “Here the page is healthy again, and the incident contains the remediation result. If the repair or verification had failed, the workflow would add a failure note and leave the incident open.” |
+| 2:10–2:20 | Architecture diagram or title card | “That’s the complete event-to-recovery loop: detect, create an incident, remediate, verify, and report the outcome.” |
+
+For a clean recording, use a successful completed run and trim setup delays. If the live run takes too long, record the architecture first, then use the completed AWX job and incident as the result screens.
 
 ## Components
 
