@@ -1,0 +1,194 @@
+---
+- name: Validate alert and create or find its ServiceNow incident
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    alert_event: "{{ ansible_eda.event | default({}) }}"
+    alert_payload: "{{ alert_event.payload | default({}) }}"
+    snow_url: "{{ lookup('env', 'SNOW_INSTANCE_URL') | regex_replace('/+$', '') }}"
+    snow_user: "{{ lookup('env', 'SNOW_USERNAME') }}"
+    snow_password: "{{ lookup('env', 'SNOW_PASSWORD') }}"
+    expected_target: demo-nginx
+    incident_correlation_id: "{{ alert_payload.dedup_key | default((alert_payload.alertname | default('unknown')) ~ ':' ~ (alert_payload.target | default('unknown'))) }}"
+  tasks:
+    - name: Require a valid, allow-listed error event
+      ansible.builtin.assert:
+        that:
+          - alert_payload.severity | default('') == 'error'
+          - alert_payload.status | default('') == 'firing'
+          - alert_payload.target | default('') == expected_target
+          - alert_payload.alertname | default('') | length > 0
+          - alert_payload.event_id | default('') | length > 0
+        fail_msg: Refusing an incomplete, non-error, or non-allow-listed event.
+
+    - name: Require ServiceNow credential values before changing the target
+      ansible.builtin.assert:
+        that:
+          - snow_url | length > 0
+          - snow_user | length > 0
+          - snow_password | length > 0
+        fail_msg: Attach the ServiceNow custom credential to this AWX job template.
+      no_log: true
+
+    - name: Find an incident already correlated to this event
+      ansible.builtin.uri:
+        url: "{{ snow_url }}/api/now/table/incident?sysparm_query=correlation_id%3D{{ incident_correlation_id | urlencode }}%5Eactive%3Dtrue&sysparm_fields=sys_id,number&sysparm_limit=1"
+        method: GET
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: true
+        headers:
+          Accept: application/json
+        return_content: true
+        status_code: 200
+      register: incident_lookup
+      no_log: true
+
+    - name: Reuse the existing correlated incident
+      ansible.builtin.set_fact:
+        snow_incident_sys_id: "{{ incident_lookup.json.result[0].sys_id }}"
+        snow_incident_number: "{{ incident_lookup.json.result[0].number }}"
+      when: incident_lookup.json.result | length > 0
+
+    - name: Create a ServiceNow incident for this alert
+      ansible.builtin.uri:
+        url: "{{ snow_url }}/api/now/table/incident"
+        method: POST
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: true
+        headers:
+          Accept: application/json
+          Content-Type: application/json
+        body_format: json
+        body:
+          short_description: "[{{ alert_payload.target }}] {{ alert_payload.alertname }}"
+          description: "{{ alert_payload.description | default(alert_payload.summary | default('Monitoring alert received')) }}"
+          correlation_id: "{{ incident_correlation_id }}"
+          urgency: "2"
+          impact: "2"
+        return_content: true
+        status_code: 201
+      register: incident_create
+      when: incident_lookup.json.result | length == 0
+      no_log: true
+
+    - name: Save the newly created incident identifiers
+      ansible.builtin.set_fact:
+        snow_incident_sys_id: "{{ incident_create.json.result.sys_id }}"
+        snow_incident_number: "{{ incident_create.json.result.number }}"
+      when: incident_lookup.json.result | length == 0
+      no_log: true
+
+    - name: Add detection note to the incident before remediation
+      ansible.builtin.uri:
+        url: "{{ snow_url }}/api/now/table/incident/{{ snow_incident_sys_id }}"
+        method: PATCH
+        user: "{{ snow_user }}"
+        password: "{{ snow_password }}"
+        force_basic_auth: true
+        headers:
+          Accept: application/json
+          Content-Type: application/json
+        body_format: json
+        body:
+          work_notes: "Automation received {{ alert_payload.alertname }} for {{ alert_payload.target }} (event {{ alert_payload.event_id }}). AWX job {{ lookup('env', 'AWX_JOB_ID') | default('manual', true) }} is starting the approved demo remediation."
+        status_code: 200
+      no_log: true
+
+    - name: Report incident reference
+      ansible.builtin.debug:
+        msg: "Working incident {{ snow_incident_number }} for {{ expected_target }}."
+
+- name: Repair and independently verify the one disposable target
+  hosts: demo_targets
+  gather_facts: false
+  become: true
+  vars:
+    alert_event: "{{ hostvars['localhost']['alert_event'] }}"
+    snow_incident_sys_id: "{{ hostvars['localhost']['snow_incident_sys_id'] }}"
+    snow_incident_number: "{{ hostvars['localhost']['snow_incident_number'] }}"
+    snow_url: "{{ lookup('env', 'SNOW_INSTANCE_URL') | regex_replace('/+$', '') }}"
+    snow_user: "{{ lookup('env', 'SNOW_USERNAME') }}"
+    snow_password: "{{ lookup('env', 'SNOW_PASSWORD') }}"
+    demo_http_url: "http://host.docker.internal:8081/"
+    expected_page_marker: Pivanta Event Remediation Demo - compliant
+  tasks:
+    - name: Repair target, verify it, and close incident only on success
+      block:
+        - name: Restore the known compliant demo page
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/../target/index.html"
+            dest: /usr/share/nginx/html/index.html
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Verify service returns the compliant content
+          ansible.builtin.uri:
+            url: "{{ demo_http_url }}"
+            method: GET
+            return_content: true
+            status_code: 200
+          delegate_to: localhost
+          become: false
+          register: recovery_check
+          until: expected_page_marker in recovery_check.content
+          retries: 6
+          delay: 2
+
+        - name: Confirm returned page contains the approved baseline
+          ansible.builtin.assert:
+            that:
+              - expected_page_marker in recovery_check.content
+            fail_msg: The service responded but did not return the compliant baseline.
+
+        - name: Resolve incident after successful independent verification
+          ansible.builtin.uri:
+            url: "{{ snow_url }}/api/now/table/incident/{{ snow_incident_sys_id }}"
+            method: PATCH
+            user: "{{ snow_user }}"
+            password: "{{ snow_password }}"
+            force_basic_auth: true
+            headers:
+              Accept: application/json
+              Content-Type: application/json
+            body_format: json
+            body:
+              state: "6"
+              close_code: "Solved (Work Around)"
+              close_notes: "AWX restored the compliant demo page and independently verified HTTP 200. Event {{ alert_event.payload.event_id }}; incident {{ snow_incident_number }}."
+              work_notes: "Automated remediation succeeded. The disposable Nginx service returned the expected compliant page after repair."
+            status_code: 200
+          delegate_to: localhost
+          become: false
+          no_log: true
+
+        - name: Report successful recovery
+          ansible.builtin.debug:
+            msg: "{{ inventory_hostname }} recovered; incident {{ snow_incident_number }} was resolved."
+
+      rescue:
+        - name: Leave incident open and record remediation failure
+          ansible.builtin.uri:
+            url: "{{ snow_url }}/api/now/table/incident/{{ snow_incident_sys_id }}"
+            method: PATCH
+            user: "{{ snow_user }}"
+            password: "{{ snow_password }}"
+            force_basic_auth: true
+            headers:
+              Accept: application/json
+              Content-Type: application/json
+            body_format: json
+            body:
+              state: "2"
+              work_notes: "Automated remediation or verification failed. Incident left open for investigation. Event {{ alert_event.payload.event_id }}; failed step: {{ ansible_failed_task.name | default('see AWX job output') }}."
+            status_code: 200
+          delegate_to: localhost
+          become: false
+          no_log: true
+
+        - name: Fail the AWX job so the failure is visible
+          ansible.builtin.fail:
+            msg: "Remediation or verification failed for {{ inventory_hostname }}. Incident {{ snow_incident_number }} remains open."

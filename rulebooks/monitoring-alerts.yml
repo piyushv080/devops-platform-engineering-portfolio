@@ -1,0 +1,25 @@
+---
+- name: Monitoring alerts to AWX workflow
+  hosts: all
+  sources:
+    - ansible.eda.webhook:
+        host: 0.0.0.0
+        port: 5000
+        endpoint: /endpoint
+  rules:
+    - name: Launch AWX remediation job for firing errors
+      condition: >-
+        event.payload.severity == "error" and
+        event.payload.status == "firing" and
+        event.payload.target is defined and
+        event.payload.alertname is defined and
+        event.payload.event_id is defined
+      action:
+        run_job_template:
+          name: Incident Remediation - Demo Nginx
+          organization: devops-org
+          include_events: true
+          job_args:
+            extra_vars:
+              event_source: monitoring_webhook
+          add_event_uuid_label: true

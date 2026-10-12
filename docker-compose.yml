@@ -1,0 +1,10 @@
+services:
+  demo-nginx:
+    build: ./target
+    container_name: event-remediation-demo-nginx
+    ports:
+      - "127.0.0.1:8081:80"
+      - "2222:22"
+    volumes:
+      - ./secrets/authorized_keys:/home/ansible/.ssh/authorized_keys:ro
+    restart: unless-stopped

@@ -1,0 +1,47 @@
+---
+- name: Periodically audit the demo service and emit an event if it drifted
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    demo_http_url: "{{ lookup('env', 'DEMO_HTTP_URL') | default('http://host.docker.internal:8081/', true) }}"
+    event_webhook_url: "{{ lookup('env', 'EVENT_WEBHOOK_URL') | default('http://host.docker.internal:5000/endpoint', true) }}"
+    expected_page_marker: Pivanta Event Remediation Demo - compliant
+  tasks:
+    - name: Read the demo page
+      ansible.builtin.uri:
+        url: "{{ demo_http_url }}"
+        method: GET
+        return_content: true
+        status_code: 200
+      register: demo_check
+      failed_when: false
+
+    - name: Emit a synthetic monitoring event when the baseline is missing
+      ansible.builtin.uri:
+        url: "{{ event_webhook_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json
+        body_format: json
+        body:
+          version: "1.0"
+          status: firing
+          severity: error
+          alertname: ScheduledDemoBaselineDrift
+          target: demo-nginx
+          instance: "{{ demo_http_url }}"
+          summary: Scheduled AWX audit found the demo service outside its baseline
+          description: "The scheduled audit did not find the required compliant page marker."
+          event_id: "awx-scheduled-{{ lookup('env', 'AWX_JOB_ID') | default(lookup('pipe', 'date -u +%Y%m%dT%H%M%S'), true) }}"
+        status_code: [200, 202]
+      when: >-
+        (demo_check.status | default(0) != 200) or
+        (expected_page_marker not in (demo_check.content | default('')))
+
+    - name: Report compliant state when no alert was sent
+      ansible.builtin.debug:
+        msg: The scheduled audit found the demo service compliant.
+      when: >-
+        demo_check.status | default(0) == 200 and
+        expected_page_marker in (demo_check.content | default(''))
