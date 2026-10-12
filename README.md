@@ -6,18 +6,49 @@ Standalone lab project at the repository root. It uses a generic monitoring webh
 
 ```mermaid
 flowchart LR
-    N[Nginx lab target] -->|drift| M[Demo monitor]
-    M -->|HTTP webhook| E[ansible-rulebook listener]
-    E -->|matched event| A[AWX job template]
-    A --> I[Create ServiceNow incident]
-    A -->|SSH| R[Repair Nginx target]
-    R --> V[HTTP verification]
-    V --> C[Update incident]
-    P[Monitoring platform] -->|same webhook| E
-    S[Optional AWX scheduled audit] -->|drift webhook| E
+    subgraph Sources[Event sources]
+        MON[Demo monitor in WSL]
+        EXT[External monitoring platform]
+    end
+
+    subgraph Lab[Local disposable lab]
+        TARGET[Demo Nginx container<br/>HTTP 8081 · SSH 2222]
+    end
+
+    subgraph EDA[Event listener in WSL]
+        WEBHOOK[ansible-rulebook webhook<br/>POST /endpoint · port 5000]
+        RULE{Rule matches<br/>error + firing + required fields}
+    end
+
+    subgraph AWX[AWX on Kubernetes]
+        API[AWX Controller API]
+        JT[Incident Remediation<br/>Job Template]
+        EE[Enterprise Ops<br/>Execution Environment]
+        PROJECT[Synced Git project<br/>playbook + inventory]
+        AUDIT[Optional scheduled<br/>baseline audit template]
+    end
+
+    SN[ServiceNow PDI<br/>Incident Table API]
+
+    MON -->|poll HTTP 8081| TARGET
+    MON -->|drift alert JSON| WEBHOOK
+    EXT -->|mapped alert JSON| WEBHOOK
+    WEBHOOK --> RULE
+    RULE -->|matched event + AWX token| API
+    API -->|launch with event data| JT
+    PROJECT -. provides playbook .-> JT
+    JT --> EE
+    EE -->|find or create incident;<br/>write detection work note| SN
+    EE -->|SSH repair on port 2222| TARGET
+    EE -->|HTTP recovery check on port 8081| TARGET
+    EE -->|verified: resolve + work notes| SN
+    EE -->|repair/check failed: leave open + note| SN
+
+    AUDIT -->|scheduled HTTP check| TARGET
+    AUDIT -->|drift webhook| WEBHOOK
 ```
 
-The local demo monitor is only a stand-in for a real monitoring product. A real product can POST to the same listener after its payload is mapped to the event fields below.
+The demo monitor polls the disposable Nginx page and posts an alert when it detects drift. A real monitoring product can replace it by posting a mapped alert to the same webhook. The rulebook listener validates the alert shape and launches the AWX job through the Controller API. The AWX playbook independently validates and allow-lists the target, records the incident before remediation, then resolves it only after the repaired page passes an HTTP check. If repair or verification fails, it records the failure and leaves the incident open. The optional scheduled audit is a separate AWX job that posts to the same webhook when it detects drift.
 
 ## Components
 
