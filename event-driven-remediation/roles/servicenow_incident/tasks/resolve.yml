@@ -13,7 +13,7 @@
     body_format: json
     body:
       state: Resolved
-      close_code: Solved (Permanently)
+      close_code: Solution Provided
       close_notes: "AWX restored the compliant demo page and independently verified HTTP 200. Event {{ alert_payload.event_id }}; incident {{ snow_incident_number }}."
       work_notes: Automated remediation succeeded. The disposable Nginx service returned the expected compliant page after repair.
     validate_certs: "{{ snow_validate_certs }}"
