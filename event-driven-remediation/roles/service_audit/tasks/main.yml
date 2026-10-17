@@ -1,0 +1,50 @@
+---
+- name: Read the demo page
+  ansible.builtin.uri:
+    url: "{{ demo_http_url }}"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: demo_check
+  failed_when: false
+
+- name: Require the webhook token if the service is outside its baseline
+  ansible.builtin.assert:
+    that:
+      - event_webhook_token | length > 0
+    fail_msg: Configure an AWX credential that injects EDA_WEBHOOK_TOKEN before enabling this scheduled audit.
+  when: >-
+    (demo_check.status | default(0) != 200) or
+    (expected_page_marker not in (demo_check.content | default('')))
+
+- name: Post an authenticated event when the baseline is missing
+  ansible.builtin.uri:
+    url: "{{ event_webhook_url }}"
+    method: POST
+    headers:
+      Content-Type: application/json
+      Authorization: "Bearer {{ event_webhook_token }}"
+    body_format: json
+    body:
+      version: "1.0"
+      status: firing
+      severity: error
+      alertname: ScheduledDemoBaselineDrift
+      target: "{{ audit_target_name }}"
+      instance: "{{ demo_http_url }}"
+      summary: Scheduled AWX audit found the demo service outside its baseline
+      description: The scheduled audit did not find the required compliant page marker.
+      event_id: "awx-scheduled-{{ lookup('env', 'AWX_JOB_ID') | default(lookup('pipe', 'date -u +%Y%m%dT%H%M%S'), true) }}"
+    status_code: [200, 202]
+  when: >-
+    (demo_check.status | default(0) != 200) or
+    (expected_page_marker not in (demo_check.content | default('')))
+  no_log: true
+
+- name: Report compliant state when no alert was sent
+  ansible.builtin.debug:
+    msg: The scheduled audit found the demo service compliant.
+  when: >-
+    demo_check.status | default(0) == 200 and
+    expected_page_marker in (demo_check.content | default(''))
+

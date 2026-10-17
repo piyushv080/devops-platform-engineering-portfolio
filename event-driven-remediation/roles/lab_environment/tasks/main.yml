@@ -1,0 +1,41 @@
+---
+- name: Validate the requested lab action
+  ansible.builtin.assert:
+    that:
+      - lab_environment_action in ['prepare', 'sample', 'start', 'drift', 'restore', 'stop']
+    fail_msg: >-
+      Choose lab_environment_action from prepare, sample, start, drift, restore, or stop.
+
+- name: Prepare local keys, webhook token, and sample event
+  when: lab_environment_action in ['prepare', 'start']
+  block:
+    - name: Create local lab credentials
+      lab_environment_manage:
+        action: prepare
+        project_dir: "{{ lab_environment_project_dir }}"
+      no_log: true
+
+    - name: Generate the sample webhook event from the role template
+      ansible.builtin.template:
+        src: error-alert.json.j2
+        dest: "{{ lab_environment_project_dir }}/rulebooks/error-alert.json"
+        mode: "0644"
+
+- name: Start the disposable Docker environment
+  lab_environment_manage:
+    action: start
+    project_dir: "{{ lab_environment_project_dir }}"
+  when: lab_environment_action == 'start'
+
+- name: Generate or refresh only the sample webhook event
+  ansible.builtin.template:
+    src: error-alert.json.j2
+    dest: "{{ lab_environment_project_dir }}/rulebooks/error-alert.json"
+    mode: "0644"
+  when: lab_environment_action == 'sample'
+
+- name: Apply the requested Docker lab action
+  lab_environment_manage:
+    action: "{{ lab_environment_action }}"
+    project_dir: "{{ lab_environment_project_dir }}"
+  when: lab_environment_action in ['drift', 'restore', 'stop']

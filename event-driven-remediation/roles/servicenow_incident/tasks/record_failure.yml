@@ -1,0 +1,21 @@
+---
+- name: Leave incident open and record the remediation failure
+  ansible.builtin.uri:
+    url: "{{ snow_url }}/api/now/table/incident/{{ snow_incident_sys_id }}"
+    method: PATCH
+    user: "{{ snow_user }}"
+    password: "{{ snow_password }}"
+    force_basic_auth: true
+    headers:
+      Accept: application/json
+      Content-Type: application/json
+    body_format: json
+    body:
+      state: "2"
+      work_notes: "Automated remediation or verification failed. Incident left open for investigation. Event {{ alert_payload.event_id }}; failed step: {{ failure_task_name | default('see AWX job output') }}."
+    validate_certs: "{{ snow_validate_certs }}"
+    status_code: 200
+  delegate_to: localhost
+  become: false
+  no_log: true
+

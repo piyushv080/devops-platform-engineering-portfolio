@@ -1,0 +1,44 @@
+---
+- name: Monitoring alerts to AWX workflow
+  hosts: all
+  sources:
+    - eda.builtin.webhook:
+        # Alertmanager reaches this host listener from the local Docker network.
+        # The bearer token is required; do not expose this demo listener publicly.
+        host: 0.0.0.0
+        port: 5000
+        endpoint: /endpoint
+        token: "{{ EDA_WEBHOOK_TOKEN }}"
+  rules:
+    - name: Launch AWX remediation job for firing errors
+      condition: >-
+        event.payload is defined and
+        event.payload.status is defined and
+        event.payload.status == "firing" and
+        (
+          (
+            event.payload.commonLabels is defined and
+            event.payload.commonLabels.severity == "error" and
+            event.payload.commonLabels.target == "web_container" and
+            event.payload.commonLabels.alertname == "DemoServiceDrift" and
+            event.payload.alerts is defined
+          ) or
+          (
+            event.payload.severity is defined and
+            event.payload.severity == "error" and
+            event.payload.target == "web_container" and
+            event.payload.alertname is defined and
+            event.payload.alertname != "" and
+            event.payload.event_id is defined and
+            event.payload.event_id != ""
+          )
+        )
+      action:
+        run_job_template:
+          name: Incident Remediation - Demo Nginx
+          organization: devops-org
+          include_events: true
+          job_args:
+            extra_vars:
+              event_source: prometheus_alertmanager
+          add_event_uuid_label: true

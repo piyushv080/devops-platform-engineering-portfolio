@@ -1,0 +1,12 @@
+groups:
+  - name: nginx-page-health
+    rules:
+      - alert: DemoServiceDrift
+        expr: probe_success{job="nginx-web-check"} == 0
+        for: 10s
+        labels:
+          severity: error
+          target: web_container
+        annotations:
+          summary: "The demo Nginx page is unavailable or outside its baseline"
+          description: "Prometheus could not confirm HTTP 200 and the approved compliant-page marker."

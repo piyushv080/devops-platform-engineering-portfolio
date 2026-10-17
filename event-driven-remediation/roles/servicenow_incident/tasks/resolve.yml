@@ -1,0 +1,23 @@
+---
+- name: Resolve incident after successful independent verification
+  ansible.builtin.uri:
+    url: "{{ snow_url }}/api/now/table/incident/{{ snow_incident_sys_id }}?sysparm_input_display_value=true"
+    method: PATCH
+    user: "{{ snow_user }}"
+    password: "{{ snow_password }}"
+    force_basic_auth: true
+    headers:
+      Accept: application/json
+      Content-Type: application/json
+    body_format: json
+    body:
+      state: Resolved
+      close_code: Resolved by caller
+      close_notes: "AWX restored the compliant demo page and independently verified HTTP 200. Event {{ alert_payload.event_id }}; incident {{ snow_incident_number }}."
+      work_notes: Automated remediation succeeded. The disposable Nginx service returned the expected compliant page after repair.
+    validate_certs: "{{ snow_validate_certs }}"
+    status_code: 200
+  delegate_to: localhost
+  become: false
+  no_log: true
+

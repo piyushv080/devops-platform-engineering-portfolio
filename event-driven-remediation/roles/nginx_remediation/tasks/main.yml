@@ -1,0 +1,51 @@
+---
+- name: Restore and verify the disposable service, then update its incident
+  block:
+    - name: Restore the known compliant demo page
+      ansible.builtin.copy:
+        src: "{{ role_path }}/../../environment/target/index.html"
+        dest: /usr/share/nginx/html/index.html
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Verify the service returns the compliant content
+      ansible.builtin.uri:
+        url: "{{ demo_http_url }}"
+        method: GET
+        return_content: true
+        status_code: 200
+      delegate_to: localhost
+      become: false
+      register: recovery_check
+      until: expected_page_marker in recovery_check.content
+      retries: 6
+      delay: 2
+
+    - name: Confirm the returned page contains the approved baseline
+      ansible.builtin.assert:
+        that:
+          - expected_page_marker in recovery_check.content
+        fail_msg: The service responded but did not return the compliant baseline.
+
+    - name: Resolve the related ServiceNow incident
+      ansible.builtin.include_role:
+        name: servicenow_incident
+        tasks_from: resolve.yml
+
+    - name: Report successful recovery
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} recovered; incident {{ snow_incident_number }} was resolved."
+
+  rescue:
+    - name: Record the failed remediation step on the incident
+      ansible.builtin.include_role:
+        name: servicenow_incident
+        tasks_from: record_failure.yml
+      vars:
+        failure_task_name: "{{ ansible_failed_task.name | default('see AWX job output') }}"
+
+    - name: Fail the AWX job so the remediation failure is visible
+      ansible.builtin.fail:
+        msg: "Remediation or verification failed for {{ inventory_hostname }}. Incident {{ snow_incident_number }} remains open."
+

@@ -3,8 +3,8 @@
   "status": "firing",
   "severity": "error",
   "alertname": "DemoServiceUnavailable",
-  "target": "demo-nginx",
-  "instance": "demo-nginx:8080",
+  "target": "web_container",
+  "instance": "web_container:8080",
   "summary": "The demo Nginx health check failed",
   "description": "Synthetic alert for testing the event-driven remediation lab",
   "event_id": "demo-incident-0001"

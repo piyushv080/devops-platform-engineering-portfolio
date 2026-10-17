@@ -1,0 +1,5 @@
+---
+snow_url: "{{ lookup('env', 'SNOW_INSTANCE_URL') | regex_replace('/+$', '') }}"
+snow_user: "{{ lookup('env', 'SNOW_USERNAME') }}"
+snow_password: "{{ lookup('env', 'SNOW_PASSWORD') }}"
+snow_validate_certs: true

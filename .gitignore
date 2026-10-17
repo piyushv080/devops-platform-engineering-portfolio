@@ -1,4 +1,16 @@
-.venv/
-secrets/
-__pycache__/
+# Python environments and generated Python files
+**/.venv/
+**/venv/
+**/__pycache__/
 *.py[cod]
+
+# Local credentials, environment files, and Ansible runtime data
+**/secrets/
+**/.env
+**/.env.*
+**/*.vault
+**/.ansible/
+
+# Test and Ansible-generated files
+**/.pytest_cache/
+*.retry

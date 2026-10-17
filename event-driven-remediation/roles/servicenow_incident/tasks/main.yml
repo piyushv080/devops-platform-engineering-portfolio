@@ -1,0 +1,86 @@
+---
+- name: Require ServiceNow credential values before changing the target
+  ansible.builtin.assert:
+    that:
+      - snow_url | length > 0
+      - snow_user | length > 0
+      - snow_password | length > 0
+    fail_msg: Attach the ServiceNow custom credential to this AWX job template.
+  no_log: true
+
+- name: Build the incident correlation key
+  ansible.builtin.set_fact:
+    incident_correlation_id: "{{ alert_payload.alertname | default('unknown') }}:{{ alert_payload.target | default('unknown') }}"
+
+- name: Find an active incident already correlated to this alert
+  ansible.builtin.uri:
+    url: "{{ snow_url }}/api/now/table/incident?sysparm_query=correlation_id%3D{{ incident_correlation_id | urlencode }}%5Eactive%3Dtrue&sysparm_fields=sys_id,number&sysparm_limit=1"
+    method: GET
+    user: "{{ snow_user }}"
+    password: "{{ snow_password }}"
+    force_basic_auth: true
+    headers:
+      Accept: application/json
+    validate_certs: "{{ snow_validate_certs }}"
+    return_content: true
+    status_code: 200
+  register: incident_lookup
+  no_log: true
+
+- name: Reuse the existing correlated incident
+  ansible.builtin.set_fact:
+    snow_incident_sys_id: "{{ incident_lookup.json.result[0].sys_id }}"
+    snow_incident_number: "{{ incident_lookup.json.result[0].number }}"
+  when: incident_lookup.json.result | length > 0
+
+- name: Create a ServiceNow incident for this alert
+  ansible.builtin.uri:
+    url: "{{ snow_url }}/api/now/table/incident"
+    method: POST
+    user: "{{ snow_user }}"
+    password: "{{ snow_password }}"
+    force_basic_auth: true
+    headers:
+      Accept: application/json
+      Content-Type: application/json
+    body_format: json
+    body:
+      short_description: "[{{ alert_payload.target }}] {{ alert_payload.alertname }}"
+      description: "{{ alert_payload.description | default(alert_payload.summary | default('Monitoring alert received')) }}"
+      correlation_id: "{{ incident_correlation_id }}"
+      urgency: "2"
+      impact: "2"
+    validate_certs: "{{ snow_validate_certs }}"
+    return_content: true
+    status_code: 201
+  register: incident_create
+  when: incident_lookup.json.result | length == 0
+  no_log: true
+
+- name: Save the newly created incident identifiers
+  ansible.builtin.set_fact:
+    snow_incident_sys_id: "{{ incident_create.json.result.sys_id }}"
+    snow_incident_number: "{{ incident_create.json.result.number }}"
+  when: incident_lookup.json.result | length == 0
+  no_log: true
+
+- name: Add the detection work note before remediation
+  ansible.builtin.uri:
+    url: "{{ snow_url }}/api/now/table/incident/{{ snow_incident_sys_id }}"
+    method: PATCH
+    user: "{{ snow_user }}"
+    password: "{{ snow_password }}"
+    force_basic_auth: true
+    headers:
+      Accept: application/json
+      Content-Type: application/json
+    body_format: json
+    body:
+      work_notes: "Ansible AWX Job ID: {{ awx_job_id | default('unknown', true) }}. Automation received {{ alert_payload.alertname }} for {{ alert_payload.target }} (event {{ alert_payload.event_id }}). The approved demo remediation is starting."
+    validate_certs: "{{ snow_validate_certs }}"
+    status_code: 200
+  no_log: true
+
+- name: Report the working incident reference
+  ansible.builtin.debug:
+    msg: "Working incident {{ snow_incident_number }} for {{ expected_target }}."

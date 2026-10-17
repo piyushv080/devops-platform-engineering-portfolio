@@ -1,0 +1,69 @@
+---
+# Single project entry point.
+# Local lab actions are selected by passing lab_environment_action.
+# AWX Rulebook runs supply ansible_eda.event; scheduled AWX audits do not.
+- name: Manage the local demo lab when an action is requested
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    lab_environment_project_dir: "{{ playbook_dir }}"
+  tasks:
+    - name: Run the requested lab action with clear failure and completion handling
+      when: lab_environment_action is defined
+      block:
+        - name: Execute the reusable lab environment role
+          ansible.builtin.include_role:
+            name: lab_environment
+      rescue:
+        - name: Explain that the lab action failed
+          ansible.builtin.debug:
+            msg: >-
+              Lab action '{{ lab_environment_action }}' failed. Review the task
+              output above; no automatic teardown was performed.
+        - name: Preserve a failed status for the lab command
+          ansible.builtin.fail:
+            msg: "Lab action '{{ lab_environment_action }}' did not complete."
+      always:
+        - name: Report completion of the requested lab action
+          ansible.builtin.debug:
+            msg: "Finished processing lab action '{{ lab_environment_action }}'."
+
+- name: Validate the alert and manage its ServiceNow incident
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    automation_mode: "{{ 'lab' if lab_environment_action is defined else ('remediate' if (ansible_eda is defined and ansible_eda.event is defined) else 'audit') }}"
+  roles:
+    - role: alert_validation
+      when: automation_mode == 'remediate'
+    - role: servicenow_incident
+      when: automation_mode == 'remediate'
+
+- name: Repair and verify the disposable web target
+  hosts: all
+  gather_facts: false
+  become: true
+  vars:
+    automation_mode: "{{ 'lab' if lab_environment_action is defined else ('remediate' if (ansible_eda is defined and ansible_eda.event is defined) else 'audit') }}"
+    expected_target: web_container
+    alert_event: "{{ hostvars['localhost']['remediation_alert_event'] }}"
+    alert_payload: "{{ hostvars['localhost']['alert_payload'] }}"
+    snow_incident_sys_id: "{{ hostvars['localhost']['snow_incident_sys_id'] }}"
+    snow_incident_number: "{{ hostvars['localhost']['snow_incident_number'] }}"
+  roles:
+    - role: nginx_remediation
+      when:
+        - automation_mode == 'remediate'
+        - inventory_hostname != 'localhost'
+
+- name: Run the optional scheduled baseline audit
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    automation_mode: "{{ 'lab' if lab_environment_action is defined else ('remediate' if (ansible_eda is defined and ansible_eda.event is defined) else 'audit') }}"
+  roles:
+    - role: service_audit
+      when: automation_mode == 'audit'
