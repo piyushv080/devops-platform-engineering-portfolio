@@ -14,7 +14,9 @@
 
 - name: Find an active incident already correlated to this alert
   ansible.builtin.uri:
-    url: "{{ snow_url }}/api/now/table/incident?sysparm_query=correlation_id%3D{{ incident_correlation_id | urlencode }}%5Eactive%3Dtrue&sysparm_fields=sys_id,number&sysparm_limit=1"
+    # The developer instance returns HTTP 500 when sysparm_fields is combined
+    # with this filter. The same filtered request succeeds without that option.
+    url: "{{ snow_url }}/api/now/table/incident?sysparm_query=correlation_id%3D{{ incident_correlation_id | urlencode }}%5Eactive%3Dtrue&sysparm_limit=1"
     method: GET
     user: "{{ snow_user }}"
     password: "{{ snow_password }}"
