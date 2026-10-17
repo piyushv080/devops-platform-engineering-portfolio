@@ -82,7 +82,10 @@ def prepare(module, project_dir):
         changed = True
     elif token_file.stat().st_size == 0:
         module.fail_json(msg=f"{token_file} is empty; remove it and run prepare again.")
-    changed |= ensure_mode(token_file, 0o600)
+    # Alertmanager runs as an unprivileged container user and reads this file
+    # through a read-only bind mount. Keep the host secrets directory at 0700,
+    # while allowing the container process to read the token file.
+    changed |= ensure_mode(token_file, 0o644)
 
     return changed
 

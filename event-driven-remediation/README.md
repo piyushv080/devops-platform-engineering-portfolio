@@ -261,8 +261,11 @@ curl -fsS http://127.0.0.1:8081/ | grep -F 'Event-Driven Remediation Service - h
 
 The `lab_environment` role creates an SSH key and webhook token under ignored
 `secrets/`, renders the sample webhook event, and starts the Docker environment.
-Existing key/token files are preserved. Import `secrets/ansible_ed25519` into
-the AWX Machine credential and keep both files private. The `environment/`
+Existing key/token files are preserved. The host `secrets/` directory stays
+private (`0700`); the webhook token file is readable inside its read-only
+Alertmanager mount so the non-root container process can authenticate requests.
+Import `secrets/ansible_ed25519` into the AWX Machine credential and keep the
+private key private. The `environment/`
 folder contains the complete Docker Compose lab: Nginx,
 Blackbox Exporter, Prometheus, and Alertmanager together. Open Prometheus at
 `http://localhost:9090/targets` and Alertmanager at `http://localhost:9093/`.
