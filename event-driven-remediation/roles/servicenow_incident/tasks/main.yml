@@ -21,6 +21,9 @@
     user: "{{ snow_user }}"
     password: "{{ snow_password }}"
     force_basic_auth: true
+    # The ServiceNow developer instance's ADC returned a generic 500 from the
+    # AWX execution environment. Bypass any inherited proxy for this API call.
+    use_proxy: false
     headers:
       Accept: application/json
     validate_certs: "{{ snow_validate_certs }}"
