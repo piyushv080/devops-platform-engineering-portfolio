@@ -39,7 +39,11 @@
       API message:
       {{ incident_lookup.get('json', {}).get('error', {}).get('message', 'No API message returned.') }}.
       API detail:
-      {{ incident_lookup.get('json', {}).get('error', {}).get('detail', incident_lookup.get('msg', 'No additional details returned.')) }}
+      {{ incident_lookup.get('json', {}).get('error', {}).get('detail', incident_lookup.get('msg', 'No additional details returned.')) }}.
+      Transaction ID:
+      {{ incident_lookup.get('x_transaction_id', incident_lookup.get('x-transaction-id', 'not returned')) }}.
+      Response body:
+      {{ incident_lookup.get('content', 'No response body returned.') | string | truncate(1000, true) }}
   when: incident_lookup.status | default(0) | int != 200
 
 - name: Reuse the existing correlated incident
