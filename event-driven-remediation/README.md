@@ -208,7 +208,7 @@ Configure the following AWX resources before running the automatic flow:
 | --- | --- |
 | Project | Sync the Git repository and branch containing this project. Confirm the sync succeeds. |
 | Inventory and host | Add group `demo_targets` and host `web_container`. Configure SSH host `host.docker.internal`, port `2222`, user `ansible`, and Python interpreter `/usr/bin/python3`. |
-| Machine credential | Add the private key generated at `secrets/ansible_ed25519`. Enable privilege escalation on the remediation template. |
+| Machine credential | Add the private key generated at `secrets/ansible_ed25519`. Leave template-wide privilege escalation disabled; the playbook enables it only for the remote disposable web target. |
 | ServiceNow credential | Store the developer-instance URL, API-only username, and password. Never put these values in Git or job extra variables. |
 | Execution Environment | Select an EE with `ansible-core`, Python, and an SSH client. This project uses built-in Ansible modules for its AWX tasks. |
 | Job template | Use the synced project, inventory, Machine and ServiceNow credentials, and this project's `run_event_driven_automation.yml`. If AWX syncs a parent repository, include the `event-driven-remediation/` prefix in the playbook path. Enable prompting for extra variables so Rulebook can pass `ansible_eda.event`. |
