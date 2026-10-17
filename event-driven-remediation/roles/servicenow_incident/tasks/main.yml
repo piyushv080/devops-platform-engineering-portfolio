@@ -33,6 +33,11 @@
   no_log: true
   # Preserve the registered response for the sanitized failure task below.
   failed_when: false
+  # ServiceNow developer instances can intermittently return a generic 500
+  # from the edge even when the same authenticated request succeeds later.
+  until: incident_lookup.status | default(0) | int == 200
+  retries: 3
+  delay: 5
 
 - name: Stop safely when the ServiceNow incident lookup fails
   ansible.builtin.fail:
