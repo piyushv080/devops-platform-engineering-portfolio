@@ -1,0 +1,64 @@
+---
+- name: Require the ServiceNow Developer credential
+  ansible.builtin.assert:
+    that:
+      - snow_base_url | length > 0
+      - snow_username | length > 0
+      - snow_password | length > 0
+    fail_msg: Attach the ServiceNow Developer credential to this AWX template.
+
+- name: Read recent ServiceNow request and incident rows
+  ansible.builtin.uri:
+    url: "{{ snow_base_url | regex_replace('/+$', '') }}/api/now/table/{{ item }}?sysparm_limit={{ opp_max_tasks_per_table }}&sysparm_fields=short_description,opened_at,closed_at,closed_by,assigned_to&sysparm_query=sys_created_on%3E%3Djavascript%3Ags.daysAgoStart({{ opp_window_days }})&sysparm_display_value=true&sysparm_exclude_reference_link=true&sysparm_orderby=-sys_created_on"
+    url_username: "{{ snow_username }}"
+    url_password: "{{ snow_password }}"
+    force_basic_auth: true
+    headers:
+      Accept: application/json
+    validate_certs: "{{ snow_validate_certs }}"
+    return_content: true
+    status_code: 200
+    timeout: 90
+  loop: "{{ opp_tables }}"
+  register: _opp_table_pages
+  no_log: true
+
+- name: Combine ServiceNow rows
+  ansible.builtin.set_fact:
+    _opp_rows: "{{ _opp_table_pages.results | map(attribute='json.result') | flatten | list }}"
+
+- name: Calculate opportunity metrics
+  opportunity_metrics:
+    tasks: "{{ _opp_rows }}"
+    handler_fields: "{{ opp_handler_fields }}"
+    automation_users: "{{ opp_automation_users }}"
+    window_days: "{{ opp_window_days }}"
+    default_minutes: "{{ opp_default_minutes }}"
+    min_volume: "{{ opp_min_volume }}"
+    top_n: "{{ opp_top_n }}"
+    unknown_as_system: "{{ opp_unknown_as_system }}"
+  register: opportunity_result
+
+- name: Ensure HTML report directory exists
+  ansible.builtin.file:
+    path: "{{ health_report_output_dir }}"
+    state: directory
+    mode: "0750"
+
+- name: Render opportunity miner HTML report
+  ansible.builtin.template:
+    src: report.html.j2
+    dest: "{{ health_report_output_dir }}/opportunity-miner.html"
+    mode: "0640"
+
+- name: Show opportunity report location
+  ansible.builtin.debug:
+    msg: "Opportunity miner HTML report: {{ health_report_output_dir }}/opportunity-miner.html"
+
+- name: Display opportunity summary
+  ansible.builtin.debug:
+    msg:
+      - "ServiceNow rows read: {{ opportunity_result.overall.tasks }} across {{ opp_tables | join(', ') }}"
+      - "Request types: {{ opportunity_result.overall.types }}; candidates for automation: {{ opportunity_result.overall.candidate_types }}"
+      - "Closed by automation: {{ opportunity_result.overall.closed_by_automation }}; by people: {{ opportunity_result.overall.closed_by_people }}; by system: {{ opportunity_result.overall.closed_by_system }}"
+      - "Candidate request types: {{ opportunity_result.candidates | to_nice_json }}"

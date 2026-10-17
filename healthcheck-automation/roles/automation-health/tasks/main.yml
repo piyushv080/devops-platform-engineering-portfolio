@@ -1,0 +1,166 @@
+---
+- name: Require the AWX API credential and endpoint
+  ansible.builtin.assert:
+    that:
+      - aap_host | length > 0
+      - aap_token | length > 0
+    fail_msg: Attach the AWX credential that injects aap_host and aap_token.
+
+- name: Capture report timestamp
+  ansible.builtin.set_fact:
+    health_as_of: "{{ ansible_date_time.iso8601 }}"
+
+- name: Read AWX job history pages
+  ansible.builtin.uri:
+    url: "{{ aap_host | regex_replace('/+$', '') }}{{ aap_api_prefix }}/jobs/?status__in=successful%2Cfailed%2Cerror%2Ccanceled&finished__gte={{ health_window_start }}&order_by=-finished&page_size={{ aap_page_size }}&page={{ item }}"
+    headers:
+      Authorization: "Bearer {{ aap_token }}"
+      Accept: application/json
+    validate_certs: "{{ aap_validate_certs }}"
+    return_content: true
+    status_code: [200, 404]
+    timeout: 60
+  vars:
+    health_window_start: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime((ansible_date_time.epoch | int) - (health_window_days | int * 86400), utc=true) }}"
+  loop: "{{ range(1, (aap_max_pages | int) + 1) | list }}"
+  register: _aap_job_pages
+  failed_when: false
+  no_log: true
+
+- name: Require a successful first job-history page
+  ansible.builtin.assert:
+    that:
+      - _aap_job_pages.results | length > 0
+      - _aap_job_pages.results[0].status | default(-1) == 200
+      - (_aap_job_pages.results | rejectattr('status', 'in', [200, 404]) | list | length) == 0
+    fail_msg: "Could not read AWX job history. Verify aap_host, token permissions, API prefix, and TLS trust."
+
+- name: Read AWX job-template pages
+  ansible.builtin.uri:
+    url: "{{ aap_host | regex_replace('/+$', '') }}{{ aap_api_prefix }}/job_templates/?page_size={{ aap_page_size }}&page={{ item }}"
+    headers:
+      Authorization: "Bearer {{ aap_token }}"
+      Accept: application/json
+    validate_certs: "{{ aap_validate_certs }}"
+    return_content: true
+    status_code: [200, 404]
+    timeout: 60
+  loop: "{{ range(1, (aap_max_pages | int) + 1) | list }}"
+  register: _aap_template_pages
+  failed_when: false
+  no_log: true
+
+- name: Require a successful first job-template page
+  ansible.builtin.assert:
+    that:
+      - _aap_template_pages.results | length > 0
+      - _aap_template_pages.results[0].status | default(-1) == 200
+      - (_aap_template_pages.results | rejectattr('status', 'in', [200, 404]) | list | length) == 0
+    fail_msg: "Could not read AWX job templates. Verify the API credential has read access."
+
+- name: Ensure AWX results were not truncated by the page limit
+  ansible.builtin.assert:
+    that:
+      - _aap_job_pages.results[-1].status != 200 or (_aap_job_pages.results[-1].json.next | default(none)) is none
+      - _aap_template_pages.results[-1].status != 200 or (_aap_template_pages.results[-1].json.next | default(none)) is none
+    fail_msg: "AWX has more results than aap_max_pages allows. Increase aap_max_pages and relaunch."
+
+- name: Combine AWX job and template pages
+  ansible.builtin.set_fact:
+    _aap_jobs: "{{ _aap_job_pages.results | selectattr('status', 'equalto', 200) | map(attribute='json.results') | flatten | selectattr('name', 'match', '^' ~ (health_template_name_prefix | regex_escape)) | list }}"
+    _aap_templates: "{{ _aap_template_pages.results | selectattr('status', 'equalto', 200) | map(attribute='json.results') | flatten | map(attribute='name') | unique | sort | select('match', '^' ~ (health_template_name_prefix | regex_escape)) | list }}"
+
+- name: Select failed jobs for failure-event lookups
+  ansible.builtin.set_fact:
+    _aap_failed_jobs: "{{ (_aap_jobs | selectattr('status', 'in', ['failed', 'error']) | list)[:(health_max_failure_lookups | int)] }}"
+
+- name: Read first failed event for each failed job
+  ansible.builtin.uri:
+    url: "{{ aap_host | regex_replace('/+$', '') }}{{ aap_api_prefix }}/jobs/{{ item.id }}/job_events/?failed=true&order_by=counter&page_size=1"
+    headers:
+      Authorization: "Bearer {{ aap_token }}"
+      Accept: application/json
+    validate_certs: "{{ aap_validate_certs }}"
+    return_content: true
+    status_code: 200
+    timeout: 60
+  loop: "{{ _aap_failed_jobs }}"
+  register: _aap_failed_event_results
+  failed_when: false
+  no_log: true
+
+- name: Add failure task descriptions to job data
+  ansible.builtin.set_fact:
+    _aap_jobs_with_reasons: >-
+      {% set reasons = {} %}
+      {% for result in (_aap_failed_event_results.results | default([])) %}
+      {% set events = result.json.results | default([]) if result.json is defined else [] %}
+      {% set event = events[0] if events | length > 0 else {} %}
+      {% set data = event.event_data | default({}) %}
+      {% set task_name = data.task | default('') %}
+      {% set task_msg = data.res.msg | default('') if data.res is defined else '' %}
+      {% set reason = (task_name ~ ': ' ~ task_msg) if task_msg else task_name %}
+      {% if reason %}{% set _ = reasons.update({result.item.id | string: reason | truncate(300, true, '...')}) %}{% endif %}
+      {% endfor %}
+      {% set output = [] %}
+      {% for job in _aap_jobs %}
+      {% set fallback = job.job_explanation | default('') %}
+      {% set _ = output.append(job | combine({'failure_reason': reasons.get(job.id | string, fallback)})) %}
+      {% endfor %}
+      {{ output }}
+
+- name: Initialize optional ServiceNow ticket matching
+  ansible.builtin.set_fact:
+    health_tickets: []
+    health_snow_notes: []
+    health_all_manual_groups: ["{{ health_manual_label }}"]
+
+- name: Read optional ServiceNow ticket sources
+  ansible.builtin.include_tasks: snow_source.yml
+  loop: "{{ health_snow_sources }}"
+  loop_control:
+    loop_var: health_src
+    label: "{{ health_src.label }}"
+  when: health_include_snow | bool
+
+- name: Show ServiceNow ticket matching summary
+  ansible.builtin.debug:
+    msg: "{{ health_snow_notes if health_snow_notes else ['Optional ServiceNow fallback matching is disabled or no sources are configured.'] }}"
+
+- name: Calculate automation health metrics
+  health_metrics:
+    jobs: "{{ _aap_jobs_with_reasons }}"
+    tickets: "{{ health_tickets }}"
+    templates: "{{ _aap_templates }}"
+    window_days: "{{ health_window_days }}"
+    as_of: "{{ health_as_of }}"
+    manual_groups: "{{ health_all_manual_groups }}"
+    manual_minutes: {}
+    default_manual_minutes: 0
+    top_failures: "{{ health_top_failures }}"
+  register: automation_health_result
+
+- name: Ensure HTML report directory exists
+  ansible.builtin.file:
+    path: "{{ health_report_output_dir }}"
+    state: directory
+    mode: "0750"
+
+- name: Render automation health HTML report
+  ansible.builtin.template:
+    src: report.html.j2
+    dest: "{{ health_report_output_dir }}/automation-health.html"
+    mode: "0640"
+
+- name: Show automation health report location
+  ansible.builtin.debug:
+    msg: "Automation health HTML report: {{ health_report_output_dir }}/automation-health.html"
+
+- name: Display automation health summary
+  ansible.builtin.debug:
+    msg:
+      - "AAP automation health for the last {{ automation_health_result.overall.window_days }} days"
+      - "Jobs: {{ automation_health_result.overall.runs }}; successful: {{ automation_health_result.overall.successful }}; failed: {{ automation_health_result.overall.failed }}; success rate: {{ automation_health_result.overall.success_rate }}%"
+      - "Templates active: {{ automation_health_result.overall.templates_active }}; not run: {{ automation_health_result.overall.templates_not_run }}"
+      - "Detailed report data: {{ automation_health_result.templates | to_nice_json }}"
+      - "Top failure reasons: {{ automation_health_result.failure_reasons | to_nice_json }}"

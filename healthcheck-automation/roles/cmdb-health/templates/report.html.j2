@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CMDB health report</title>
+  <style>
+    :root{font-family:system-ui,sans-serif;color:#172033;background:#f3f6fb}body{max-width:1100px;margin:2rem auto;padding:0 1rem}
+    h1{margin-bottom:.25rem}.muted{color:#58677d}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:.8rem;margin:1.4rem 0}
+    .card,section{background:#fff;border:1px solid #d8e0ec;border-radius:10px;padding:1rem}.value{font-size:1.6rem;font-weight:700}section{margin:1rem 0;overflow-x:auto}
+    table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:.6rem;border-bottom:1px solid #e5eaf1}th{background:#f7f9fc}
+  </style>
+</head>
+<body>
+  <h1>CMDB health</h1>
+  <p class="muted">Table <code>{{ cmdb_table | e }}</code> · As of {{ cmdb_health_result.overall.as_of | e }} · Stale threshold {{ cmdb_health_result.overall.stale_days }} days</p>
+  <div class="cards">
+    <div class="card"><div class="muted">Records read</div><div class="value">{{ cmdb_health_result.overall.total_read }}</div></div>
+    <div class="card"><div class="muted">In scope</div><div class="value">{{ cmdb_health_result.overall.in_scope }}</div></div>
+    <div class="card"><div class="muted">Healthy</div><div class="value">{{ cmdb_health_result.overall.healthy }}</div></div>
+    <div class="card"><div class="muted">Health</div><div class="value">{{ cmdb_health_result.overall.health_percent | default('N/A', true) }}{% if cmdb_health_result.overall.health_percent is not none %}%{% endif %}</div></div>
+    <div class="card"><div class="muted">Stale / no owner</div><div class="value">{{ cmdb_health_result.overall.stale }} / {{ cmdb_health_result.overall.no_owner }}</div></div>
+    <div class="card"><div class="muted">Duplicate names</div><div class="value">{{ cmdb_health_result.overall.duplicate_names }}</div></div>
+  </div>
+  <section><h2>Field completeness</h2><table><thead><tr><th>Field</th><th>Populated</th><th>Completeness</th></tr></thead><tbody>
+  {% for row in cmdb_health_result.field_fill %}<tr><td>{{ row.field | e }}</td><td>{{ row.filled }} / {{ cmdb_health_result.overall.total_read }}</td><td>{{ row.percent | default('N/A', true) }}{% if row.percent is not none %}%{% endif %}</td></tr>{% else %}<tr><td colspan="3">No field data.</td></tr>{% endfor %}
+  </tbody></table></section>
+  <section><h2>Stale configuration items</h2><table><thead><tr><th>Name</th><th>Class</th><th>Age in days</th></tr></thead><tbody>
+  {% for row in cmdb_health_result.stale %}<tr><td>{{ row.name | default('(unnamed)', true) | e }}</td><td>{{ row.class | e }}</td><td>{{ row.days | default('Unknown', true) }}</td></tr>{% else %}<tr><td colspan="3">No stale items found.</td></tr>{% endfor %}
+  </tbody></table></section>
+  <section><h2>Missing owners</h2><ul>{% for row in cmdb_health_result.no_owner %}<li>{{ row.name | default('(unnamed)', true) | e }} — {{ row.class | e }}</li>{% else %}<li>No missing owners found.</li>{% endfor %}</ul></section>
+  <section><h2>Duplicate names</h2><table><thead><tr><th>Name</th><th>Records</th></tr></thead><tbody>
+  {% for row in cmdb_health_result.duplicates %}<tr><td>{{ row.name | e }}</td><td>{{ row.count }}</td></tr>{% else %}<tr><td colspan="2">No duplicate names found.</td></tr>{% endfor %}
+  </tbody></table></section>
+</body></html>

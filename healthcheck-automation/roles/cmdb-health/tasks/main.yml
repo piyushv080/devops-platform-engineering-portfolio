@@ -1,0 +1,67 @@
+---
+- name: Require the ServiceNow Developer credential
+  ansible.builtin.assert:
+    that:
+      - snow_base_url | length > 0
+      - snow_username | length > 0
+      - snow_password | length > 0
+    fail_msg: Attach the ServiceNow Developer credential to this AWX template.
+
+- name: Capture CMDB report timestamp
+  ansible.builtin.set_fact:
+    _cmdb_as_of: "{{ ansible_date_time.iso8601 }}"
+
+- name: Read a bounded set of CMDB records in pages
+  ansible.builtin.uri:
+    url: "{{ snow_base_url | regex_replace('/+$', '') }}/api/now/table/{{ cmdb_table }}?sysparm_limit={{ cmdb_page_size }}&sysparm_offset={{ item }}&sysparm_fields={{ cmdb_fields | join(',') | urlencode }}&sysparm_query={{ cmdb_query | urlencode }}&sysparm_display_value=false&sysparm_exclude_reference_link=true&sysparm_orderby=sys_id"
+    url_username: "{{ snow_username }}"
+    url_password: "{{ snow_password }}"
+    force_basic_auth: true
+    headers:
+      Accept: application/json
+    validate_certs: "{{ snow_validate_certs }}"
+    return_content: true
+    status_code: 200
+    timeout: 90
+  loop: "{{ range(0, (cmdb_max_cis | int), (cmdb_page_size | int)) | list }}"
+  register: _cmdb_pages
+  no_log: true
+
+- name: Combine CMDB pages
+  ansible.builtin.set_fact:
+    _cmdb_records: "{{ _cmdb_pages.results | map(attribute='json.result') | flatten | list }}"
+
+- name: Calculate CMDB metrics
+  cmdb_metrics:
+    cis: "{{ _cmdb_records }}"
+    as_of: "{{ _cmdb_as_of }}"
+    fields: "{{ cmdb_fields }}"
+    in_scope_status_values: "{{ cmdb_status_values }}"
+    stale_days: "{{ cmdb_stale_days }}"
+    owner_fields: "{{ cmdb_owner_fields }}"
+    list_limit: "{{ cmdb_list_limit }}"
+  register: cmdb_health_result
+
+- name: Ensure HTML report directory exists
+  ansible.builtin.file:
+    path: "{{ health_report_output_dir }}"
+    state: directory
+    mode: "0750"
+
+- name: Render CMDB health HTML report
+  ansible.builtin.template:
+    src: report.html.j2
+    dest: "{{ health_report_output_dir }}/cmdb-health.html"
+    mode: "0640"
+
+- name: Show CMDB health report location
+  ansible.builtin.debug:
+    msg: "CMDB health HTML report: {{ health_report_output_dir }}/cmdb-health.html"
+
+- name: Display CMDB health summary
+  ansible.builtin.debug:
+    msg:
+      - "CMDB table: {{ cmdb_table }}; records read: {{ cmdb_health_result.overall.total_read }}; live/in scope: {{ cmdb_health_result.overall.in_scope }}"
+      - "Healthy: {{ cmdb_health_result.overall.healthy }} ({{ cmdb_health_result.overall.health_percent }}%); stale: {{ cmdb_health_result.overall.stale }}; no owner: {{ cmdb_health_result.overall.no_owner }}; duplicate names: {{ cmdb_health_result.overall.duplicate_names }}"
+      - "Field fill: {{ cmdb_health_result.field_fill | to_nice_json }}"
+      - "Sample stale CI names: {{ cmdb_health_result.stale_names[:cmdb_list_limit] | to_nice_json }}"
