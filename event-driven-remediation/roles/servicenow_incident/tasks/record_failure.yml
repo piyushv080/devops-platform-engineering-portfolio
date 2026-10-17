@@ -20,6 +20,14 @@
   register: incident_failure_note_update
   no_log: true
   failed_when: false
+  # Retry transient ServiceNow edge failures for the rescue work-note PATCH.
+  # A journal PATCH may append a duplicate if the server committed the note
+  # but its response was lost.
+  until: >-
+    incident_failure_note_update.status | default(0) | int == 200 or
+    incident_failure_note_update.status | default(0) | int not in [0, 500]
+  retries: 3
+  delay: 5
 
 - name: Report a sanitized ServiceNow failure-note error
   ansible.builtin.fail:

@@ -15,7 +15,6 @@
       state: Resolved
       close_code: Solution Provided
       close_notes: "AWX restored the compliant demo page and independently verified HTTP 200. Event {{ alert_payload.event_id }}; incident {{ snow_incident_number }}."
-      work_notes: Automated remediation succeeded. The disposable Nginx service returned the expected compliant page after repair.
     validate_certs: "{{ snow_validate_certs }}"
     status_code: 200
   delegate_to: localhost
@@ -23,6 +22,13 @@
   register: incident_resolve_update
   no_log: true
   failed_when: false
+  # This PATCH only sets ordinary incident fields, so retrying a transient
+  # edge 500 cannot append duplicate journal entries.
+  until: >-
+    incident_resolve_update.status | default(0) | int == 200 or
+    incident_resolve_update.status | default(0) | int not in [0, 500]
+  retries: 3
+  delay: 5
 
 - name: Report a sanitized ServiceNow incident resolution error
   ansible.builtin.fail:
