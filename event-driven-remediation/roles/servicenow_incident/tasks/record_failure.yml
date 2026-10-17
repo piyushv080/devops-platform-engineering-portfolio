@@ -11,11 +11,23 @@
       Content-Type: application/json
     body_format: json
     body:
-      state: "2"
       work_notes: "Automated remediation or verification failed. Incident left open for investigation. Event {{ alert_payload.event_id }}; failed step: {{ failure_task_name | default('see AWX job output') }}."
     validate_certs: "{{ snow_validate_certs }}"
     status_code: 200
   delegate_to: localhost
   become: false
+  register: incident_failure_note_update
   no_log: true
+  failed_when: false
+
+- name: Report a sanitized ServiceNow failure-note error
+  ansible.builtin.fail:
+    msg: >-
+      ServiceNow failure work-note update failed. HTTP status:
+      {{ incident_failure_note_update.status | default('no response') }}.
+      API message:
+      {{ incident_failure_note_update.get('json', {}).get('error', {}).get('message', 'No API message returned.') }}.
+      API detail:
+      {{ incident_failure_note_update.get('json', {}).get('error', {}).get('detail', incident_failure_note_update.get('msg', 'No additional details returned.')) }}
+  when: incident_failure_note_update.status | default(0) | int != 200
 

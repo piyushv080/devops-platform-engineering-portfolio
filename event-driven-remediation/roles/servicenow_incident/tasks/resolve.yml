@@ -1,7 +1,7 @@
 ---
 - name: Resolve incident after successful independent verification
   ansible.builtin.uri:
-    url: "{{ snow_url }}/api/now/table/incident/{{ snow_incident_sys_id }}?sysparm_input_display_value=true"
+    url: "{{ snow_url }}/api/now/table/incident/{{ snow_incident_sys_id }}"
     method: PATCH
     user: "{{ snow_user }}"
     password: "{{ snow_password }}"
@@ -11,13 +11,26 @@
       Content-Type: application/json
     body_format: json
     body:
-      state: Resolved
-      close_code: Resolved by caller
+      state: "6"
+      close_code: Solved (Permanently)
       close_notes: "AWX restored the compliant demo page and independently verified HTTP 200. Event {{ alert_payload.event_id }}; incident {{ snow_incident_number }}."
       work_notes: Automated remediation succeeded. The disposable Nginx service returned the expected compliant page after repair.
     validate_certs: "{{ snow_validate_certs }}"
     status_code: 200
   delegate_to: localhost
   become: false
+  register: incident_resolve_update
   no_log: true
+  failed_when: false
+
+- name: Report a sanitized ServiceNow incident resolution error
+  ansible.builtin.fail:
+    msg: >-
+      ServiceNow incident resolution failed. HTTP status:
+      {{ incident_resolve_update.status | default('no response') }}.
+      API message:
+      {{ incident_resolve_update.get('json', {}).get('error', {}).get('message', 'No API message returned.') }}.
+      API detail:
+      {{ incident_resolve_update.get('json', {}).get('error', {}).get('detail', incident_resolve_update.get('msg', 'No additional details returned.')) }}
+  when: incident_resolve_update.status | default(0) | int != 200
 
