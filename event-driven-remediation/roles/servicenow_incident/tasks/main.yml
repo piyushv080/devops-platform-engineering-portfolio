@@ -111,6 +111,13 @@
   register: work_note_update
   no_log: true
   failed_when: false
+  # Retry transient ServiceNow edge failures. A journal PATCH may append a
+  # duplicate if ServiceNow committed the note but its response was lost.
+  until: >-
+    work_note_update.status | default(0) | int == 200 or
+    work_note_update.status | default(0) | int not in [0, 500]
+  retries: 3
+  delay: 5
 
 - name: Stop safely when adding the ServiceNow work note fails
   ansible.builtin.fail:
