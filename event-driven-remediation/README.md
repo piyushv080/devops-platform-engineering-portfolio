@@ -58,7 +58,7 @@ flowchart LR
     end
     ee -->|SSH repair| target
     ee -->|independent HTTP verification| target
-    ee -->|create/update; resolve after verification| snow
+    ee -->|create or update, then resolve after verification| snow
     operator -->|observe job and incident| template
 ```
 
@@ -141,13 +141,13 @@ sequenceDiagram
     A-->>R: POST authenticated webhook
     R->>R: Allow-list alert and web_container target
     R->>C: Launch approved job template with event
-    C->>S: Find or create correlated incident; add work note
+    C->>S: Find or create correlated incident and add work note
     C->>W: Restore compliant page over SSH
     C->>W: Independently verify page over HTTP
     alt verification succeeds
         C->>S: Resolve incident and record outcome
     else repair or verification fails
-        C->>S: Record failure; leave incident open
+        C->>S: Record failure and leave incident open
     end
 ```
 
