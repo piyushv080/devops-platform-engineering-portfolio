@@ -288,30 +288,39 @@ expected. Prometheus detects the changed content, and the AWX job restores
 `environment/target/index.html`; its independent HTTP check looks for the
 healthy page marker before the incident can be resolved.
 
-## 2. Start the local event listener
+## 2. Start the event listener
 
 The custom Python website poller has been removed. Prometheus monitors the
-Nginx page. Python is used by Ansible and the local `ansible-rulebook` listener.
+Nginx page. The Rulebook listener runs as a Docker Compose service beside
+Alertmanager, so the webhook travels over the Compose network instead of
+crossing from a container into WSL.
 
 Keep your AWX Controller port-forward running in another terminal, then open
 AWX at `http://localhost:8080`. This lab assumes the controller and required
 job template have already been deployed and configured.
 
-Start the Rulebook listener:
+Load the AWX token from the encrypted Vault file and start the listener and
+Alertmanager. Run this from the event project directory:
 
 ```bash
-python rulebooks/run_rulebook.py
+export EDA_CONTROLLER_TOKEN="$(
+  ansible-vault view secrets/eda-controller.yml |
+  python -c 'import sys, yaml; print(yaml.safe_load(sys.stdin)["eda_controller_token"])'
+)"
+docker compose -f environment/docker-compose.yml --profile event-driven \
+  up -d --build rulebook alertmanager
+unset EDA_CONTROLLER_TOKEN
 ```
 
-It prompts silently for the AWX API token and loads the local webhook token. The
-default Controller URL is `http://127.0.0.1:8080`; this is the host/base URL,
-not a URL ending in `/api/v2`. Set `EDA_CONTROLLER_URL` only if your AWX
-port-forward uses a different address.
+Enter the Vault password when prompted. The container loads the webhook token
+from `secrets/webhook-token`. Alertmanager sends to the Compose service name
+`rulebook:5000`. The default Controller URL in the container is
+`http://host.docker.internal:8080` (the host/base URL, not a URL ending in
+`/api/v2`). Set `EDA_CONTROLLER_URL` before the Compose command if the
+Rulebook container needs a different reachable Controller address.
 
-The listener requires the shared bearer token. It listens on the WSL host
-interface so the Alertmanager container can reach it at
-`host.docker.internal:5000`; do not expose this demo listener to the public
-internet.
+The listener is available only on the private Compose network. Do not publish
+its port to the public internet.
 
 ## 3. Run a full automatic test
 
@@ -334,23 +343,11 @@ Then verify the AWX job succeeded and the ServiceNow incident has detection and
 completion work notes and a resolved state. If any repair or verification step
 fails, the playbook should leave the incident open with a failure note.
 
-## 4. Optional: test the webhook without waiting for Prometheus
+## 4. Optional: direct webhook test
 
-With the listener running, post the sample event using the local token:
-
-```bash
-read -rsp 'Webhook bearer token: ' EDA_WEBHOOK_TOKEN
-echo
-curl --fail-with-body --silent --show-error \
-  -X POST http://127.0.0.1:5000/endpoint \
-  -H "Authorization: Bearer ${EDA_WEBHOOK_TOKEN}" \
-  -H 'Content-Type: application/json' \
-  --data @rulebooks/error-alert.json
-unset EDA_WEBHOOK_TOKEN
-```
-
-This sample has a fixed `event_id`, so repeated posts reuse the correlated
-incident. For a fresh incident, change the ID in a copied event payload.
+The listener is intentionally not published on the workstation's port 5000.
+Use the Prometheus firing alert for the end-to-end test, or run the listener
+and a test webhook client on the same Compose network.
 
 ## ServiceNow and retry behavior
 

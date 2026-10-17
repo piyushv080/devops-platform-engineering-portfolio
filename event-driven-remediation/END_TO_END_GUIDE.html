@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="End-to-end architecture, setup, testing, drift, restore, and troubleshooting guide for the event-driven remediation lab.">
+<title>Event-Driven Remediation Lab — End-to-End Guide</title>
+<style>
+:root{color-scheme:light;--ink:#17212b;--muted:#536273;--blue:#0866c6;--line:#d8e0e8;--panel:#f4f7fa;--green:#137547;--red:#b42318;--gold:#925f00}
+*{box-sizing:border-box}body{margin:0;background:#eef2f6;color:var(--ink);font:16px/1.65 system-ui,-apple-system,"Segoe UI",sans-serif}
+header{padding:3rem max(1.25rem,calc((100% - 1100px)/2));background:linear-gradient(135deg,#092d45,#0866c6);color:white}
+header h1{font-size:clamp(2rem,5vw,3.2rem);line-height:1.12;margin:.2rem 0 1rem}header p{max-width:850px;color:#e2efff}
+main{max-width:1100px;margin:2rem auto;padding:0 1rem}.layout{display:grid;grid-template-columns:250px minmax(0,1fr);gap:1.25rem}
+nav,.card{background:white;border:1px solid var(--line);border-radius:12px;box-shadow:0 2px 8px #15283a0c}
+nav{padding:1rem;align-self:start;position:sticky;top:1rem}nav strong{display:block;margin-bottom:.4rem}nav a{display:block;padding:.25rem 0;color:var(--blue);text-decoration:none;font-size:.92rem}
+article{min-width:0}.card{padding:1.5rem;margin-bottom:1rem}h2{font-size:1.55rem;line-height:1.25;margin:0 0 .8rem}h3{font-size:1.1rem;margin:1.25rem 0 .35rem}p{margin:.5rem 0 1rem}a{color:var(--blue)}code,pre{font-family:ui-monospace,SFMono-Regular,Consolas,monospace}code{background:#eef3f7;padding:.08rem .3rem;border-radius:4px;overflow-wrap:anywhere}
+pre{background:#101923;color:#e7f0fa;padding:1rem;border-radius:8px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-size:.88rem;line-height:1.5}
+.callout{padding:.8rem 1rem;border-left:4px solid var(--blue);background:#eef6ff;border-radius:4px;margin:1rem 0}.success{border-color:var(--green);background:#effaf4}.warning{border-color:#d18b00;background:#fff8e5}.error{border-color:var(--red);background:#fff2f0}
+.pill{display:inline-block;border-radius:100px;padding:.15rem .6rem;background:#eaf2fb;color:#174d83;font-size:.84rem;font-weight:650}
+.architecture{display:grid;gap:1rem}.boundary{border:2px solid #8eb8e2;border-radius:12px;background:#f4f9ff;padding:1rem}.boundary-title{display:flex;align-items:center;gap:.6rem;color:#174d83;font-weight:750;margin:0 0 .8rem}.boundary-title small{font-weight:500;color:var(--muted)}.arch-row{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.65rem}.arch-node{background:white;border:1px solid #c8d6e3;border-radius:9px;padding:.8rem;min-height:105px}.arch-node strong{display:block;color:#123a5c;margin-bottom:.25rem}.arch-node span{display:block;color:var(--muted);font-size:.88rem;line-height:1.45}.arch-step{display:flex;align-items:center;justify-content:center;gap:.65rem;color:#42647e;font-size:.87rem;padding:.15rem}.arch-step:before,.arch-step:after{content:"";height:1px;background:#b6cadd;flex:1}.arch-step b{background:#e8f1f9;border-radius:100px;padding:.2rem .7rem;text-align:center;font-weight:600}.split-flow{display:grid;grid-template-columns:1fr 1fr;gap:.75rem}.split-flow .arch-node{min-height:auto}.arrow-down{text-align:center;color:var(--blue);font-size:1.35rem;line-height:1;font-weight:800}.external-row{display:grid;grid-template-columns:1fr auto 1fr;gap:.65rem;align-items:stretch}.external-row .arch-node{min-height:auto}.network-note{background:#fff8e5;border-left:4px solid #d18b00;border-radius:5px;padding:.75rem 1rem;color:#593d09;font-size:.92rem}
+table{border-collapse:collapse;width:100%;font-size:.93rem}th,td{text-align:left;padding:.65rem;border:1px solid var(--line);vertical-align:top}th{background:var(--panel)}
+footer{max-width:1100px;margin:1rem auto;padding:1rem;color:var(--muted);font-size:.9rem}
+@media(max-width:800px){.layout{grid-template-columns:1fr}nav{position:static}header{padding:2rem 1rem}.arch-row{grid-template-columns:1fr 1fr}.external-row{grid-template-columns:1fr}.external-row .arrow-down{transform:rotate(90deg)}}
+@media(max-width:480px){.arch-row,.split-flow{grid-template-columns:1fr}.arch-node{min-height:auto}}
+@media print{body{background:white}.layout{display:block}nav{display:none}.card{box-shadow:none;break-inside:avoid}header{background:#123;color:white}a{color:inherit}}
+</style>
+</head>
+<body>
+<header>
+  <p><span class="pill">PROJECT RUNBOOK</span></p>
+  <h1>Event-Driven Remediation Lab</h1>
+  <p>End-to-end guide to the architecture, disposable test environment, AWX and ServiceNow integration, drift and restore commands, successful recovery flow, and troubleshooting lessons from this lab.</p>
+  <p><strong>Verified result:</strong> AWX job 280 restored the demo Nginx page, checked its healthy marker, resolved incident INC0010004 with resolution code “Solution provided,” and finished successfully.</p>
+</header>
+<main class="layout">
+<nav aria-label="Contents">
+<strong>On this page</strong>
+<a href="#overview">1. What the project does</a>
+<a href="#architecture">2. Architecture and event path</a>
+<a href="#environment">3. Disposable test environment</a>
+<a href="#awx">4. AWX configuration</a>
+<a href="#secrets">5. Credentials and secrets</a>
+<a href="#start">6. Start the lab</a>
+<a href="#test">7. Test drift and remediation</a>
+<a href="#restore">8. Restore and reset</a>
+<a href="#servicenow">9. ServiceNow lifecycle</a>
+<a href="#troubleshooting">10. Troubleshooting fixes</a>
+<a href="#cleanup">11. Stop and cleanup</a>
+<a href="#map">12. Project file map</a>
+</nav>
+<article>
+<section class="card" id="overview">
+<h2>1. What this project does</h2>
+<p>This repository demonstrates event-driven operations using Prometheus, Alertmanager, Ansible Rulebook, AWX, Ansible, a disposable Nginx target, and a ServiceNow developer instance. A synthetic page drift triggers an alert. Rulebook starts an AWX job, AWX records the incident, repairs the isolated target, verifies the result independently, and resolves the incident.</p>
+<div class="callout success"><strong>Successful end state:</strong> target page contains <code>Event-Driven Remediation Service - healthy</code>; AWX run is successful; the linked ServiceNow incident is Resolved and has a resolution note and code.</div>
+<p>This is a lab demonstration. Keep credentials out of source control and use only the disposable target for remediation experiments.</p>
+</section>
+
+<section class="card" id="architecture">
+<h2>2. Architecture and event path</h2>
+<div class="architecture" aria-label="Architecture diagram showing the monitoring stack, event handoff, AWX remediation, and ServiceNow updates">
+ <div class="boundary">
+  <div class="boundary-title">DISPOSABLE MONITORING LAB <small>Docker Compose network</small></div>
+  <div class="arch-row">
+   <div class="arch-node"><strong>1 · Demo Nginx</strong><span>Serves the baseline or intentionally drifted page.<br>Host ports: HTTP 8081 · SSH 2222</span></div>
+   <div class="arch-node"><strong>2 · Blackbox Exporter</strong><span>Requests the page and checks HTTP success plus the approved healthy marker.</span></div>
+   <div class="arch-node"><strong>3 · Prometheus</strong><span>Scrapes the probe every 5 seconds. The drift alert must hold for 10 seconds.</span></div>
+   <div class="arch-node"><strong>4 · Alertmanager</strong><span>Groups the firing alert and posts its payload to the Rulebook webhook.</span></div>
+  </div>
+  <div class="arch-step"><b>Probe → metric → firing alert → webhook</b></div>
+  <div class="split-flow">
+   <div class="arch-node"><strong>5 · Ansible Rulebook</strong><span>Receives the Alertmanager event, checks its name/severity/target, and requests an AWX launch.</span></div>
+   <div class="arch-node"><strong>Controller API</strong><span>Rulebook authenticates to AWX with its controller token and launches the named job template.</span></div>
+  </div>
+ </div>
+ <div class="arrow-down" aria-hidden="true">↓</div>
+ <div class="external-row">
+  <div class="arch-node"><strong>6 · AWX Job</strong><span>Runs the playbook with the selected project revision, inventory, SSH Machine credential, and ServiceNow credential.</span></div>
+  <div class="arrow-down" aria-hidden="true">↔</div>
+  <div class="arch-node"><strong>7 · ServiceNow</strong><span>Reuses or creates the correlated incident, records work notes, and receives resolution only after verification.</span></div>
+ </div>
+ <div class="arrow-down" aria-hidden="true">↓</div>
+ <div class="boundary">
+  <div class="boundary-title">REMEDIATION AND VERIFICATION <small>Executed by AWX against the disposable target</small></div>
+  <div class="arch-row">
+   <div class="arch-node"><strong>A · Validate event</strong><span>Reject unexpected alert names, severity, or target values.</span></div>
+   <div class="arch-node"><strong>B · Record incident</strong><span>Find/create the correlated incident and append a detection note.</span></div>
+   <div class="arch-node"><strong>C · Repair over SSH</strong><span>Restore the known compliant page on the demo target.</span></div>
+   <div class="arch-node"><strong>D · Verify, then resolve</strong><span>Fetch the page independently; resolve only when the healthy marker is present.</span></div>
+  </div>
+ </div>
+ <p class="network-note"><strong>Connection directions:</strong> Alertmanager → Rulebook uses Compose DNS <code>rulebook:5000</code>. Rulebook → AWX uses the controller URL. AWX → target uses SSH at <code>host.docker.internal:2222</code>. AWX → ServiceNow uses HTTPS and the job credential.</p>
+</div>
+<h3>Event sequence</h3>
+<ol>
+<li>The lab’s <code>drift</code> action replaces the disposable Nginx page with a deliberately noncompliant page.</li>
+<li>Blackbox Exporter probes the target URL. Prometheus evaluates <code>probe_success{job="nginx-web-check"} == 0</code>.</li>
+<li>After the configured 10-second alert duration, Prometheus sends the firing alert to Alertmanager.</li>
+<li>Alertmanager posts to <code>http://rulebook:5000/endpoint</code>. The service name works on the Compose network.</li>
+<li>The rulebook accepts the expected alert name, error severity, and allow-listed target, then launches the AWX template.</li>
+<li>The playbook validates the event, finds or creates the correlated ServiceNow incident, and writes a detection work note.</li>
+<li>Ansible connects to the demo target over SSH, restores the baseline page, and fetches the HTTP page from localhost to verify the marker.</li>
+<li>Only after verification passes does the playbook resolve the incident using the instance’s accepted resolution code and a resolution note.</li>
+</ol>
+</section>
+
+<section class="card" id="environment">
+<h2>3. Disposable test environment</h2>
+<p>The Compose file is <code>environment/docker-compose.yml</code>. The <code>event-driven</code> profile includes the services needed for the alert flow. Compose also provides network DNS between containers.</p>
+<table>
+<thead><tr><th>Service</th><th>Purpose</th><th>Relevant access</th></tr></thead>
+<tbody>
+<tr><td><code>demo-nginx</code></td><td>Disposable Nginx target, SSH server, Ansible user</td><td><code>http://127.0.0.1:8081</code>, SSH port <code>2222</code></td></tr>
+<tr><td><code>blackbox-exporter</code></td><td>Probes the demo HTTP page and expected content</td><td>Compose network; exporter port 9115</td></tr>
+<tr><td><code>prometheus</code></td><td>Scrapes the probe and evaluates alert rules</td><td><code>http://localhost:9090</code></td></tr>
+<tr><td><code>alertmanager</code></td><td>Delivers firing alert webhooks to Rulebook</td><td><code>http://localhost:9093</code></td></tr>
+<tr><td><code>rulebook</code></td><td>Runs Ansible Rulebook and calls AWX</td><td>Internal endpoint <code>http://rulebook:5000/endpoint</code></td></tr>
+</tbody></table>
+<p>The target is built from <code>nginx:alpine</code>. Its image setup installs OpenSSH and Python, creates the <code>ansible</code> account, unlocks that account for public-key SSH, installs the public key, and allows the lab’s required sudo operations. The private key stays in the local <code>secrets/</code> folder and is supplied to AWX as a Machine credential.</p>
+<div class="callout warning"><strong>Network distinction:</strong> <code>localhost</code> inside a container means that container. Alertmanager therefore uses Compose DNS <code>rulebook:5000</code>, while the rulebook uses <code>host.docker.internal:8080</code> to reach AWX on the host. The target inventory also uses <code>host.docker.internal</code> and published SSH port <code>2222</code>.</div>
+</section>
+
+<section class="card" id="awx">
+<h2>4. AWX configuration checklist</h2>
+<p>AWX runs the automation; the local rulebook submits a launch request to it. Confirm these resources exist and are current:</p>
+<ol>
+<li><strong>Project:</strong> points to the portfolio Git repository and the branch containing this project. Sync it after code changes.</li>
+<li><strong>Inventory:</strong> contains the demo target. The host variables need <code>ansible_host: host.docker.internal</code>, <code>ansible_port: 2222</code>, <code>ansible_user: ansible</code>, and <code>ansible_python_interpreter: /usr/bin/python3</code>.</li>
+<li><strong>Machine credential:</strong> uses the matching private key from <code>secrets/ansible_ed25519</code> and connects as <code>ansible</code>.</li>
+<li><strong>ServiceNow credential:</strong> custom credential injects <code>SNOW_INSTANCE_URL</code>, <code>SNOW_USERNAME</code>, and <code>SNOW_PASSWORD</code> into the job environment. The URL is the instance root, for example <code>https://your-instance.service-now.com</code>.</li>
+<li><strong>Execution environment:</strong> includes Ansible and the required collections/dependencies used by this playbook.</li>
+<li><strong>Job template:</strong> name must exactly match <code>Incident Remediation - Demo Nginx</code>, organization must be <code>devops-org</code>, and it must use the project, inventory, Machine credential, and ServiceNow credential.</li>
+<li><strong>Playbook path:</strong> if the AWX project root is the portfolio repository root, use <code>event-driven-remediation/run_event_driven_automation.yml</code>.</li>
+</ol>
+<p>Do not create duplicate credentials or reconfigure an already working template. Sync the project after changes, and check the job’s selected project revision when diagnosing a stale run.</p>
+</section>
+
+<section class="card" id="secrets">
+<h2>5. Credentials and secrets</h2>
+<p>Expected local files are ignored by Git. Check <code>.gitignore</code> before adding any secret. The rulebook controller token is encrypted with Ansible Vault in <code>secrets/eda-controller.yml</code>; its YAML key is <code>eda_controller_token</code>. The rulebook container also reads its webhook token from the configured secret file.</p>
+<pre>cd /path/to/your/clone/devops-platform-engineering-portfolio/event-driven-remediation
+ansible-vault create secrets/eda-controller.yml</pre>
+<p>Replace <code>/path/to/your/clone</code> with the directory where you cloned the repository.</p>
+<p>Enter YAML content in the editor (substitute your own AWX token; never paste it into this HTML or commit it):</p>
+<pre>eda_controller_token: "PASTE_YOUR_AWX_TOKEN_IN_THE_VAULT_EDITOR"</pre>
+<p>The local rulebook launcher reads the encrypted controller token via Vault, prompts for the Vault password as appropriate, then starts the event listener. The Compose rulebook container receives its controller connection settings through environment variables. The ServiceNow password is stored in AWX’s credential record, not in the playbook or this page.</p>
+<div class="callout error"><strong>Secret hygiene:</strong> a password or token previously pasted into chat, terminal history, a file, or a repository should be rotated. Do not put Basic Auth strings, passwords, tokens, or private-key contents into screenshots or logs.</div>
+</section>
+
+<section class="card" id="start">
+<h2>6. Start the lab</h2>
+<h3>6.1 Go to the project directory</h3>
+<pre>cd /path/to/your/clone/devops-platform-engineering-portfolio/event-driven-remediation</pre>
+<p>Replace <code>/path/to/your/clone</code> with your actual repository location. Run commands from this project directory; do not paste the shell prompt or type angle-bracket placeholders.</p>
+<h3>6.2 Prepare and start the target and monitoring stack</h3>
+<pre>ansible-playbook run_event_driven_automation.yml -e lab_environment_action=prepare
+ansible-playbook run_event_driven_automation.yml -e lab_environment_action=start
+docker compose -f environment/docker-compose.yml --profile event-driven ps</pre>
+<p>Wait until the target, exporter, Prometheus, Alertmanager, and rulebook report healthy or running. If you just rebuilt the target, verify its SSH login before launching the remediation job:</p>
+<pre>ssh -i secrets/ansible_ed25519 -p 2222 \
+  -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new \
+  ansible@127.0.0.1 whoami</pre>
+<p>Expected output: <code>ansible</code>.</p>
+<h3>6.3 Start the event listener and Alertmanager</h3>
+<p>For the current Compose-based deployment, run the rulebook in the Compose service. Make sure the AWX controller is reachable at the configured URL and that the controller token is available to the container. If following the repository’s launcher procedure instead, do not start a second listener on the same port.</p>
+<pre>export EDA_CONTROLLER_TOKEN="$(
+  ansible-vault view secrets/eda-controller.yml |
+  python -c 'import sys, yaml; print(yaml.safe_load(sys.stdin)["eda_controller_token"])'
+)"
+export EDA_CONTROLLER_URL=http://host.docker.internal:8080
+docker compose -f environment/docker-compose.yml --profile event-driven up -d --build rulebook alertmanager
+unset EDA_CONTROLLER_TOKEN EDA_CONTROLLER_URL</pre>
+<p>Inspect the service state and logs:</p>
+<pre>docker compose -f environment/docker-compose.yml --profile event-driven ps
+docker compose -f environment/docker-compose.yml --profile event-driven logs --since=5m --tail=100 rulebook alertmanager</pre>
+<p>Open Prometheus at <code>http://localhost:9090/alerts</code> and Alertmanager at <code>http://localhost:9093</code>. An alert should be inactive while the healthy baseline page is served.</p>
+</section>
+
+<section class="card" id="test">
+<h2>7. Test drift and end-to-end remediation</h2>
+<p>Keep the Compose services running. Run the <code>drift</code> action from the event-driven-remediation directory:</p>
+<pre>ansible-playbook run_event_driven_automation.yml -e lab_environment_action=drift</pre>
+<p>This action writes the sample drift page into the disposable target. It does not itself launch the AWX remediation job; Prometheus must detect the failed probe, Alertmanager must deliver the event, and the running Rulebook must launch AWX.</p>
+<h3>What to watch</h3>
+<ol>
+<li>Wait longer than the alert’s 10-second hold period.</li>
+<li>Prometheus at <code>http://localhost:9090/alerts</code> should show <code>DemoServiceDrift</code> firing with target <code>web_container</code>.</li>
+<li>Alertmanager at <code>http://localhost:9093</code> should show the firing alert.</li>
+<li>Watch Rulebook and Alertmanager logs. Rulebook should receive an alert and submit a launch to AWX.</li>
+<li>In AWX Jobs, open the newest <code>Incident Remediation - Demo Nginx</code> run. Confirm it has a recent start time and the expected project revision; avoid diagnosing a prior job from the history list.</li>
+<li>Follow the job output through incident lookup, detection note, SSH repair, independent HTTP verification, and incident resolution.</li>
+<li>Expected outcome is successful job status and a resolved ServiceNow incident with a resolution code and notes.</li>
+</ol>
+<pre>docker compose -f environment/docker-compose.yml --profile event-driven logs -f rulebook alertmanager</pre>
+<p>In another terminal, check the restored page after the job completes:</p>
+<pre>curl -fsS http://127.0.0.1:8081/ | grep -F 'Event-Driven Remediation Service - healthy'</pre>
+<p>A successful output line containing the marker confirms the page is back to baseline. The playbook’s own verification is also required before it resolves the incident.</p>
+<div class="callout"><strong>Alert timing:</strong> the stack scrapes at 5-second intervals, waits 10 seconds for a firing condition, and Alertmanager has a short grouping delay. Allow several scrape cycles for end-to-end delivery.</div>
+</section>
+
+<section class="card" id="restore">
+<h2>8. Restore and reset</h2>
+<p>Use <code>restore</code> when you want to manually put the healthy page back without waiting for an alert-triggered repair:</p>
+<pre>ansible-playbook run_event_driven_automation.yml -e lab_environment_action=restore</pre>
+<p>Then confirm the baseline:</p>
+<pre>curl -fsS http://127.0.0.1:8081/ | grep -F 'Event-Driven Remediation Service - healthy'</pre>
+<p>For the full test cycle, use the sequence below. Each action is an AWX/Ansible lab command run from the event-driven-remediation directory:</p>
+<pre># Start the lab once
+ansible-playbook run_event_driven_automation.yml -e lab_environment_action=start
+
+# Create a deliberate drift condition; monitoring should trigger remediation
+ansible-playbook run_event_driven_automation.yml -e lab_environment_action=drift
+
+# Or manually return the page to baseline and verify it
+ansible-playbook run_event_driven_automation.yml -e lab_environment_action=restore</pre>
+<p>The lab role also supports <code>sample</code> for applying the sample page and <code>stop</code> to stop the Compose lab. Check the role’s defaults/tasks if you need exact behavior before using an action.</p>
+</section>
+
+<section class="card" id="servicenow">
+<h2>9. ServiceNow incident lifecycle</h2>
+<p>The integration uses the Table API and correlates incidents to the alert key (for this run, <code>DemoServiceDrift:web_container</code>). The automation first looks for an active correlated incident, reuses it when found, or creates one if not. It writes a detection work note before modifying the target.</p>
+<p>After Nginx has been repaired, the playbook independently fetches the page and asserts that the approved healthy marker is present. Only then does it update the incident to Resolved, supply the instance’s accepted resolution code, and add resolution notes. The successful final record showed <strong>Solution provided</strong>.</p>
+<h3>Evidence from the completed run</h3>
+<ul>
+<li>Incident lookup succeeded after transient retries; the job reused <code>INC0010004</code>.</li>
+<li>The detection work note succeeded after transient retry.</li>
+<li>SSH connected to <code>web_container</code>; baseline page changed and verification passed.</li>
+<li>Incident resolution succeeded and the AWX job completed with no failed or unreachable hosts.</li>
+</ul>
+<h3>ServiceNow errors encountered and what they meant</h3>
+<ul>
+<li><strong>HTTP 401 / “Required to provide Auth information”:</strong> credentials missing or not sent; use the credential username/password and Basic Auth only in a secure test.</li>
+<li><strong>HTTP 500 HTML from <code>snow_adc</code>:</strong> transient instance edge/API failure. In this project safe requests retry; configuration uses <code>use_proxy: false</code> so requests do not take an unintended proxy path. Recheck the exact same read request in PowerShell before changing AWX credentials.</li>
+<li><strong>HTTP 403 with “Resolution code” mandatory:</strong> resolution requires a valid resolution choice. This developer instance accepted the display value <code>Solution Provided</code>; the final successful update included that value and resolution notes.</li>
+<li><strong>HTTP 500 on a journal write:</strong> the work-note endpoint may fail transiently even when a separate request works. The automation retries. Check the incident activity history before rerunning because a timed-out journal update may have committed and can create duplicate notes.</li>
+<li><strong>HTTP 403 reading <code>sys_choice</code>:</strong> the API user may not be allowed to read choice metadata. Use the instance UI’s Resolution Information choices or the exact choice already validated in the successful run.</li>
+</ul>
+<div class="callout warning">The user account shown in the instance had active <code>itil</code> and <code>sn_incident_write</code> roles. The root cause of the earlier failures was not simply “ITIL missing”: we observed transient ADC 500s and a mandatory resolution-code data policy. The final run confirmed the configured path works.</div>
+</section>
+
+<section class="card" id="troubleshooting">
+<h2>10. Troubleshooting fixes from this build</h2>
+<table>
+<thead><tr><th>Symptom</th><th>What fixed or diagnoses it</th></tr></thead>
+<tbody>
+<tr><td><code>cd &lt;path-to-repo&gt;</code> fails or Compose file not found</td><td>Change into your actual clone’s <code>devops-platform-engineering-portfolio/event-driven-remediation</code> directory. Run Compose with <code>-f environment/docker-compose.yml</code> from that directory.</td></tr>
+<tr><td>SSH says <code>Permission denied (publickey)</code></td><td>Check that AWX uses the matching private key and username <code>ansible</code>. The target image had a locked user; its Dockerfile was corrected to unlock it, then rebuilt and recreated. Verify fingerprint matches and run the direct SSH check above.</td></tr>
+<tr><td>SSH says remote host identification changed</td><td>When the disposable target is rebuilt, its host key changes. Remove only that lab host/port entry, then reconnect: <code>ssh-keygen -f ~/.ssh/known_hosts -R '[127.0.0.1]:2222'</code>. Do this only for the expected rebuilt lab.</td></tr>
+<tr><td>Docker pull fails through a broken credential helper</td><td>The Docker Desktop daemon was available, but the WSL client credential helper failed. An empty temporary Docker config successfully pulled the public image: <code>mkdir -p /tmp/docker-anonymous</code>; write <code>{"auths":{}}</code> to its config and run the pull with <code>DOCKER_CONFIG=/tmp/docker-anonymous</code>. This workaround does not replace normal private registry credentials.</td></tr>
+<tr><td>Rulebook/Alertmanager cannot reach each other</td><td>Keep both on the same Compose network and use <code>http://rulebook:5000/endpoint</code> for Alertmanager’s webhook. Do not use a host-local address from one container to reach another.</td></tr>
+<tr><td>Port 5000 is already in use</td><td>A second locally launched Rulebook listener may be running. Use one deployment mode at a time; the final documented flow runs the rulebook in Compose. Check logs/state before starting another listener.</td></tr>
+<tr><td>Container config/mount appears stale after changes</td><td>Recreate the affected service after changing the Compose config or image: <code>docker compose -f environment/docker-compose.yml --profile event-driven up -d --build --force-recreate rulebook alertmanager</code>.</td></tr>
+<tr><td>AWX job is old or uses unexpected code</td><td>Inspect the newest job ID, start time, selected project revision, project sync, and template. Do not infer current behavior from an older failed run.</td></tr>
+<tr><td>ServiceNow lookup or note sometimes returns 500</td><td>Correlate with the HTTP response body and transaction ID if returned, rerun a safe GET in PowerShell, then inspect the newest AWX run. The completed run passed with retry handling; do not paste credentials or retry a write blindly.</td></tr>
+<tr><td>AWX task output hides error due to <code>no_log</code></td><td>Inspect the sanitized task failure emitted by the playbook or test the matching operation with PowerShell while keeping the password private. The playbook suppresses secrets in output intentionally.</td></tr>
+</tbody></table>
+<h3>Useful diagnostics</h3>
+<pre>cd /path/to/your/clone/devops-platform-engineering-portfolio/event-driven-remediation
+
+docker compose -f environment/docker-compose.yml --profile event-driven ps
+docker compose -f environment/docker-compose.yml --profile event-driven logs --since=5m --tail=100 rulebook alertmanager
+
+curl -i http://127.0.0.1:8081/
+ssh -i secrets/ansible_ed25519 -p 2222 -o IdentitiesOnly=yes ansible@127.0.0.1 whoami</pre>
+</section>
+
+<section class="card" id="cleanup">
+<h2>11. Stop and cleanup</h2>
+<p>Use the project’s stop action to bring down the lab services:</p>
+<pre>ansible-playbook run_event_driven_automation.yml -e lab_environment_action=stop</pre>
+<p>Or inspect the Compose profile before manually stopping it:</p>
+<pre>docker compose -f environment/docker-compose.yml --profile event-driven down</pre>
+<p>This is a disposable lab. Do not remove volumes or images unless you intend to reset local container state. The ServiceNow incident remains in the developer instance for audit/demo purposes.</p>
+</section>
+
+<section class="card" id="map">
+<h2>12. Project file map</h2>
+<table>
+<thead><tr><th>Path</th><th>Role in the end-to-end flow</th></tr></thead>
+<tbody>
+<tr><td><code>run_event_driven_automation.yml</code></td><td>Entry playbook: local lab actions, event-driven remediation, and optional audit.</td></tr>
+<tr><td><code>environment/docker-compose.yml</code></td><td>Defines the lab target, monitoring components, Alertmanager, and Rulebook service.</td></tr>
+<tr><td><code>environment/demo-nginx/</code></td><td>Disposable target Dockerfile and baseline web content.</td></tr>
+<tr><td><code>environment/prometheus/</code></td><td>Scrape and alert-rule configuration.</td></tr>
+<tr><td><code>environment/alertmanager/</code></td><td>Alert receiver and Rulebook webhook destination.</td></tr>
+<tr><td><code>environment/rulebook/</code></td><td>Rulebook service image/build context and runtime dependencies.</td></tr>
+<tr><td><code>rulebooks/</code></td><td>Alert matching and AWX launch logic, including local launcher.</td></tr>
+<tr><td><code>inventories/</code></td><td>AWX-managed target inventory configuration and host connection settings.</td></tr>
+<tr><td><code>roles/lab_environment/</code></td><td>Prepare, start, drift, restore, sample, and stop actions for the test lab.</td></tr>
+<tr><td><code>roles/alert_validation/</code></td><td>Extracts and validates the incoming allow-listed alert event.</td></tr>
+<tr><td><code>roles/servicenow_incident/</code></td><td>Finds/creates correlated incidents, writes work notes, and resolves after verified recovery.</td></tr>
+<tr><td><code>roles/nginx_remediation/</code></td><td>Restores baseline page, checks it independently, and reports remediation outcome.</td></tr>
+<tr><td><code>secrets/</code></td><td>Local encrypted/controller and SSH secrets; must remain untracked and private.</td></tr>
+</tbody></table>
+<p>For exact variables and implementation details, this guide accompanies rather than replaces the playbook, roles, Compose definitions, and project README. If code changes, sync the AWX project and repeat the end-to-end drift test.</p>
+</section>
+</article>
+</main>
+<footer>Event-Driven Remediation Lab · End-to-End Guide · 17 October 2026</footer>
+</body>
+</html>

@@ -48,6 +48,22 @@ services:
       - alertmanager-data:/alertmanager
     restart: unless-stopped
 
+  # Keep the webhook listener on the same Compose network as Alertmanager.
+  # This avoids routing container traffic through the WSL/Windows host boundary.
+  rulebook:
+    profiles: [event-driven]
+    build:
+      context: ..
+      dockerfile: environment/rulebook/Dockerfile
+    environment:
+      EDA_CONTROLLER_TOKEN: ${EDA_CONTROLLER_TOKEN:-}
+      EDA_CONTROLLER_URL: ${EDA_CONTROLLER_URL:-http://host.docker.internal:8080}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - ../secrets/webhook-token:/app/secrets/webhook-token:ro
+    restart: unless-stopped
+
 volumes:
   prometheus-data:
   alertmanager-data:

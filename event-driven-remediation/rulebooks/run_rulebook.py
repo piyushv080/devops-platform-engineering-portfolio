@@ -27,13 +27,15 @@ def main() -> int:
         print("ansible-rulebook is missing. Install requirements.txt in a Python virtual environment first.", file=sys.stderr)
         return 1
 
-    controller_token = os.environ.get("EDA_CONTROLLER_TOKEN") or getpass.getpass("AWX API token: ")
+    controller_token = os.environ.get("EDA_CONTROLLER_TOKEN", "")
+    if not controller_token and sys.stdin.isatty():
+        controller_token = getpass.getpass("AWX API token: ")
     webhook_token = os.environ.get("EDA_WEBHOOK_TOKEN", "")
     if not webhook_token:
         token_file = project_dir / "secrets" / "webhook-token"
         if token_file.is_file() and token_file.stat().st_size:
             webhook_token = token_file.read_text(encoding="utf-8").strip()
-        else:
+        elif sys.stdin.isatty():
             webhook_token = getpass.getpass("Webhook bearer token: ")
     if not controller_token or not webhook_token:
         print("Both AWX API and webhook tokens are required.", file=sys.stderr)

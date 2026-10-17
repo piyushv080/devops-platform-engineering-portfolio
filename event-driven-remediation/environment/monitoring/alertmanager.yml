@@ -8,7 +8,7 @@ route:
 receivers:
   - name: awx-rulebook
     webhook_configs:
-      - url: http://host.docker.internal:5000/endpoint
+      - url: http://rulebook:5000/endpoint
         send_resolved: false
         http_config:
           authorization:
