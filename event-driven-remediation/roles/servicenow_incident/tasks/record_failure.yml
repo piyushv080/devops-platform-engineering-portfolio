@@ -6,6 +6,7 @@
     user: "{{ snow_user }}"
     password: "{{ snow_password }}"
     force_basic_auth: true
+    use_proxy: false
     headers:
       Accept: application/json
       Content-Type: application/json
