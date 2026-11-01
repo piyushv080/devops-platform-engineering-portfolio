@@ -2,8 +2,9 @@ name: Promote one project file from dev to main
 
 on:
   schedule:
-    # 09:00 Asia/Kolkata (03:30 UTC)
-    - cron: "30 3 * * *"
+    # Check hourly from 09:00 to 20:00 Asia/Kolkata (03:30 to 14:30 UTC).
+    # A date-based gate below allows one varying promotion time per day.
+    - cron: "30 3-14 * * *"
 
 permissions:
   contents: write
@@ -37,6 +38,18 @@ jobs:
             "healthcheck-automation"
             "OpsAgentX-Local"
           )
+
+          today_ist="$(TZ=Asia/Kolkata date +%F)"
+          day_number=$(( $(date -u -d "$today_ist" +%s) / 86400 ))
+          current_hour=$((10#$(TZ=Asia/Kolkata date +%H)))
+          # Select a different hour each day, rotating through 09:00–20:00 IST.
+          target_hour=$((9 + (day_number * 7 % 12)))
+
+          if (( current_hour < target_hour )); then
+            echo "Today's promotion slot is ${target_hour}:00 Asia/Kolkata; checking again then."
+            exit 0
+          fi
+
           selected_file=""
 
           # Choose the first missing file, using the project order above and
@@ -58,10 +71,32 @@ jobs:
             exit 0
           fi
 
+          if git log origin/main --format=%B | grep -Fqx "daily-promotion-date: $today_ist"; then
+            echo "One file has already been promoted today; skipping the remaining scheduled checks."
+            exit 0
+          fi
+
           git checkout origin/dev -- "$selected_file"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Promote $selected_file from dev"
+
+          content_summary="$(git show "origin/dev:$selected_file" | python3 -c '
+          import sys
+          for line in sys.stdin:
+              summary = " ".join(line.split())
+              if summary:
+                  print(summary.lstrip("# ")[:52])
+                  break
+          ' )"
+          if [[ -z "$content_summary" ]]; then
+            content_summary="$selected_file"
+          fi
+
+          git commit \
+            -m "Promote: $content_summary" \
+            -m "File: $selected_file" \
+            -m "Source branch: dev" \
+            -m "daily-promotion-date: $today_ist"
           git push origin HEAD:main
 
           echo "Promoted one file: $selected_file"
