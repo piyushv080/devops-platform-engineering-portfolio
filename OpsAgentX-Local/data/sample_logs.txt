@@ -1,0 +1,5 @@
+2026-10-31T09:15:22 ERROR server-01 Disk usage reached 95%
+2026-10-31T09:16:22 WARNING server-02 CPU usage reached 80%
+2026-10-31T09:17:22 INFO server-03 Server health check passed
+2026-10-31T09:18:22 ERROR server-04 Application service stopped
+2026-10-31T09:19:22 ERROR server-01 Memory usage reached 98%

@@ -1,0 +1,5 @@
+2026-10-31T09:15:22 ERROR server-01 Disk usage reached 95%
+INVALID LOG ENTRY
+2026-10-31T09:17:22 INFO server-03 Health check passed
+2026-10-31T09:18:22 DEBUG server-04 Unsupported severity
+2026-10-31T09:16:22 WARNING server-02 CPU usage reached 80%
