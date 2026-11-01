@@ -1,41 +1,52 @@
-# Event-Driven Remediation
+# DevOps Platform Engineering Portfolio
 
-An end-to-end lab that detects a web service drift, dispatches an approved event to AWX, repairs a disposable Nginx target, independently verifies recovery, and records the result in ServiceNow.
+Hands-on projects exploring infrastructure automation, event-driven recovery,
+operational reporting, and log analysis. The projects currently available in
+the `dev` branch are listed below.
 
-## Project guide
+## Projects
 
-The complete project documentation, including its architecture, setup, test commands, restore workflow, and troubleshooting, is in [event-driven-remediation/README.md](event-driven-remediation/README.md).
+### Event-Driven Remediation
 
-The standalone visual walkthrough is [event-driven-remediation/END_TO_END_GUIDE.html](event-driven-remediation/END_TO_END_GUIDE.html).
+An end-to-end lab that detects drift in a disposable Nginx service and routes an
+approved alert through Prometheus, Alertmanager, and Ansible Rulebook to AWX.
+AWX repairs and verifies the target, then records the incident outcome in
+ServiceNow.
 
-## Main flow
+- **Technologies:** Docker Compose, Prometheus, Blackbox Exporter, Alertmanager,
+  Ansible Rulebook, AWX, Ansible, and ServiceNow.
+- **Guide:** [Event-Driven Remediation](event-driven-remediation/README.md)
+- **Visual walkthrough:** [End-to-end guide](event-driven-remediation/END_TO_END_GUIDE.html)
 
-1. Blackbox Exporter probes the disposable Nginx page.
-2. Prometheus detects an unhealthy response or missing approved page marker.
-3. Alertmanager sends the firing alert to Ansible Rulebook.
-4. Rulebook validates the event and launches the AWX remediation template.
-5. AWX records or reuses the correlated ServiceNow incident, restores the demo page over SSH, and independently checks the HTTP response.
-6. AWX resolves the incident only after the healthy page is verified.
+### Healthcheck Automation
 
-## Quick test
+An AWX reporting project with three read-only reports: automation job health,
+ServiceNow CMDB data quality, and repeated-work opportunities for automation.
+It prints summaries in AWX and creates detailed HTML reports without changing
+AWX or ServiceNow records.
 
-Run these commands from the `event-driven-remediation` directory:
+- **Technologies:** Ansible, AWX, Python, Jinja, and ServiceNow APIs.
+- **Guide:** [Healthcheck Automation](healthcheck-automation/README.md)
 
-```bash
-ansible-playbook run_event_driven_automation.yml -e lab_environment_action=start
-ansible-playbook run_event_driven_automation.yml -e lab_environment_action=drift
-```
+### OpsAgentX Local Log Analyzer
 
-The drift action creates the alert condition. Keep the monitoring stack and event listener running, then watch the newest AWX job. To restore the healthy page manually:
+A small Python application that parses infrastructure log files, counts
+`ERROR`, `WARNING`, and `INFO` records, lists affected servers, and keeps
+malformed lines with their error reasons.
 
-```bash
-ansible-playbook run_event_driven_automation.yml -e lab_environment_action=restore
-```
+- **Technologies:** Python standard library and pytest.
+- **Guide:** [OpsAgentX Local](OpsAgentX-Local/README.md)
+- **Run locally:** from `OpsAgentX-Local/`, run `python -m app.main`.
 
-## Technologies
+## Validation workflow
 
-Docker Compose · Prometheus · Blackbox Exporter · Alertmanager · Ansible Rulebook · AWX · Ansible · ServiceNow Table API
+The [event-lab GitHub Actions workflow](.github/workflows/validate-event-lab.yml)
+runs for relevant pushes and pull requests targeting `dev`. It compiles the
+project's Python files, runs mock-only unit tests, and checks the Ansible
+playbook syntax.
 
-## Safety
+## Getting started
 
-Remediation is scoped to the disposable demo target and allow-listed alert. Keep controller tokens, ServiceNow credentials, and SSH private keys in their intended secret stores; never commit them.
+Each project guide explains its prerequisites, configuration, and run steps.
+Keep AWX, ServiceNow, and SSH credentials in the appropriate secret stores;
+never commit credentials to this repository.
