@@ -1,2 +1,0 @@
----
-lab_environment_project_dir: "{{ playbook_dir }}"
