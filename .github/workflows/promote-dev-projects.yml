@@ -1,0 +1,86 @@
+name: Promote one project file from dev to main
+
+on:
+  schedule:
+    # 09:00 Asia/Kolkata (03:30 UTC)
+    - cron: "30 3 * * *"
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: daily-dev-project-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote-one-file:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Copy the next project file and push it to main
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git fetch origin main dev
+
+          projects=(
+            "event-driven-remediation"
+            "healthcheck-automation"
+            "OpsAgentX-Local"
+          )
+          selected_file=""
+
+          # Choose the first missing file, using the project order above and
+          # Git's stable path ordering within each project.
+          for project in "${projects[@]}"; do
+            while IFS= read -r source_file; do
+              [[ -n "$source_file" ]] || continue
+              if ! git cat-file -e "origin/main:$source_file" 2>/dev/null; then
+                selected_file="$source_file"
+                break 2
+              fi
+            done < <(git ls-tree -r --name-only origin/dev -- "$project")
+          done
+
+          if [[ -z "$selected_file" ]]; then
+            echo "All project files are already present on main. Disabling this workflow."
+            gh api --method PUT \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/promote-dev-projects.yml/disable"
+            exit 0
+          fi
+
+          git checkout origin/dev -- "$selected_file"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Promote $selected_file from dev"
+          git push origin HEAD:main
+
+          echo "Promoted one file: $selected_file"
+
+          # If this was the final missing project file, stop future scheduled runs.
+          more_files_remain=false
+          for project in "${projects[@]}"; do
+            while IFS= read -r source_file; do
+              [[ -n "$source_file" ]] || continue
+              [[ "$source_file" == "$selected_file" ]] && continue
+              if ! git cat-file -e "HEAD:$source_file" 2>/dev/null; then
+                more_files_remain=true
+                break 2
+              fi
+            done < <(git ls-tree -r --name-only origin/dev -- "$project")
+          done
+
+          if [[ "$more_files_remain" == false ]]; then
+            echo "All project files are now on main. Disabling this workflow."
+            gh api --method PUT \
+              "repos/${GITHUB_REPOSITORY}/actions/workflows/promote-dev-projects.yml/disable"
+          fi
