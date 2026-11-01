@@ -1,0 +1,37 @@
+name: Validate Event-Driven Remediation Lab
+
+on:
+  push:
+    branches: [dev]
+    paths:
+      - "event-driven-remediation/**"
+      - ".github/workflows/validate-event-lab.yml"
+  pull_request:
+    branches: [dev]
+    paths:
+      - "event-driven-remediation/**"
+      - ".github/workflows/validate-event-lab.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  offline-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pinned project dependencies
+        run: python -m pip install -r event-driven-remediation/requirements.txt
+      - name: Compile local Python files
+        run: python -m compileall -q event-driven-remediation/roles event-driven-remediation/rulebooks event-driven-remediation/tests
+      - name: Run mock-only unit tests
+        working-directory: event-driven-remediation
+        run: python -m unittest discover -s tests -v
+      - name: Check playbook syntax without connecting to hosts
+        working-directory: event-driven-remediation
+        env:
+          ANSIBLE_ROLES_PATH: ./roles
+        run: ansible-playbook --syntax-check -i inventory/hosts.ini run_event_driven_automation.yml
