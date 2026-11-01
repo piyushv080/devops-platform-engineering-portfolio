@@ -2,8 +2,6 @@ name: Promote one project file from dev to main
 
 on:
   schedule:
-    # Check hourly from 09:00 to 20:00 Asia/Kolkata (03:30 to 14:30 UTC).
-    # A date-based gate below allows one varying promotion time per day.
     - cron: "30 3-14 * * *"
 
 permissions:
@@ -51,17 +49,35 @@ jobs:
           fi
 
           selected_file=""
+          selected_project=""
+          selected_project_progress=0
+          selected_project_total=0
+          total_files=0
+          present_files=0
 
-          # Choose the first missing file, using the project order above and
-          # Git's stable path ordering within each project.
+          # Count tracked files and choose the first missing file in project
+          # order, using Git's stable path ordering within each project.
           for project in "${projects[@]}"; do
+            project_total=0
+            project_present=0
             while IFS= read -r source_file; do
               [[ -n "$source_file" ]] || continue
-              if ! git cat-file -e "origin/main:$source_file" 2>/dev/null; then
+
+              total_files=$((total_files + 1))
+              project_total=$((project_total + 1))
+              if git cat-file -e "origin/main:$source_file" 2>/dev/null; then
+                present_files=$((present_files + 1))
+                project_present=$((project_present + 1))
+              elif [[ -z "$selected_file" ]]; then
                 selected_file="$source_file"
-                break 2
+                selected_project="$project"
+                selected_project_progress=$((project_present + 1))
               fi
             done < <(git ls-tree -r --name-only origin/dev -- "$project")
+
+            if [[ "$selected_project" == "$project" ]]; then
+              selected_project_total="$project_total"
+            fi
           done
 
           if [[ -z "$selected_file" ]]; then
@@ -85,15 +101,25 @@ jobs:
           for line in sys.stdin:
               summary = " ".join(line.split())
               if summary:
-                  print(summary.lstrip("# ")[:52])
+                  print(summary.lstrip("# ")[:36])
                   break
           ' )"
           if [[ -z "$content_summary" ]]; then
             content_summary="$selected_file"
           fi
 
+          case "$selected_project" in
+            event-driven-remediation) project_label="Event" ;;
+            healthcheck-automation) project_label="Healthcheck" ;;
+            OpsAgentX-Local) project_label="OpsAgentX" ;;
+          esac
+          global_progress=$((present_files + 1))
+          printf -v global_progress_label '%02d/%02d' "$global_progress" "$total_files"
+          printf -v project_progress_label '%02d/%02d' \
+            "$selected_project_progress" "$selected_project_total"
+
           git commit \
-            -m "Promote: $content_summary" \
+            -m "Progress $global_progress_label [$project_label $project_progress_label]: $content_summary" \
             -m "File: $selected_file" \
             -m "Source branch: dev" \
             -m "daily-promotion-date: $today_ist"
