@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#24111b">
+    <title>Event-Driven Remediation | Drift Detected</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #160d18;
+        color: #fff1f2;
+      }
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(ellipse at 15% 10%, #be123c55, transparent 38rem), #160d18;
+      }
+      .shell { width: min(100% - 2rem, 980px); padding: 3rem 0; }
+      .topline { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+      .brand { display: flex; align-items: center; gap: .7rem; font-size: .9rem; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+      .brand-mark { display: grid; place-items: center; width: 2.2rem; aspect-ratio: 1; border-radius: .7rem; color: #1c1018; background: linear-gradient(135deg, #fda4af, #fb7185); }
+      .status { padding: .55rem .85rem; border: 1px solid #fb718566; border-radius: 99px; color: #fecdd3; background: #88133755; font-size: .82rem; font-weight: 700; }
+      main { padding: clamp(2rem, 7vw, 5rem); border: 1px solid #ffffff1c; border-radius: 2rem; background: linear-gradient(135deg, #ffffff10, #ffffff04); box-shadow: 0 2rem 7rem #0006; }
+      .eyebrow { color: #fda4af; font-size: .78rem; font-weight: 750; letter-spacing: .16em; text-transform: uppercase; }
+      h1 { margin: 1.1rem 0; font-size: clamp(2.3rem, 7vw, 5rem); line-height: 1; letter-spacing: -.06em; }
+      .intro { max-width: 680px; color: #e7cbd2; font-size: clamp(1rem, 2vw, 1.2rem); line-height: 1.7; }
+      .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 2.5rem; }
+      .step { padding: 1.2rem; border: 1px solid #fb718533; border-radius: 1rem; background: #160d1880; }
+      .step span { display: block; margin-bottom: .55rem; color: #fda4af; font-size: .76rem; letter-spacing: .1em; text-transform: uppercase; }
+      .step strong { color: #fff1f2; }
+      footer { margin-top: 1.2rem; color: #c5aab2; font-size: .82rem; }
+      @media (max-width: 650px) { .topline { align-items: flex-start; flex-direction: column; } .steps { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="topline">
+        <div class="brand"><span class="brand-mark">E</span> Event-Driven Remediation</div>
+        <div class="status">Service drift detected</div>
+      </div>
+      <main>
+        <div class="eyebrow">Event-Driven Remediation Service - drift detected</div>
+        <h1>The service needs attention.</h1>
+        <p class="intro">This disposable container is showing a simulated fault. Prometheus should detect the changed page, Alertmanager should deliver the event, and Ansible Rulebook should launch AWX to restore and verify the healthy baseline.</p>
+        <section class="steps" aria-label="Expected remediation workflow">
+          <div class="step"><span>01 · Detect</span><strong>Prometheus alert</strong></div>
+          <div class="step"><span>02 · Dispatch</span><strong>Ansible Rulebook launches AWX</strong></div>
+          <div class="step"><span>03 · Recover</span><strong>AWX repairs and verifies</strong></div>
+        </section>
+      </main>
+      <footer>Disposable web container · awaiting automated remediation</footer>
+    </div>
+  </body>
+</html>
