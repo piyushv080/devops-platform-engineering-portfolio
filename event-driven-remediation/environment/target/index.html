@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#081426">
+    <title>Event-Driven Remediation | Healthy Service</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #081426;
+        color: #edf5ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        margin: 0;
+        display: grid;
+        place-items: center;
+        overflow: hidden;
+        background:
+          radial-gradient(ellipse at 15% 10%, #0e749055, transparent 38rem),
+          radial-gradient(ellipse at 90% 85%, #7c3aed44, transparent 34rem),
+          #081426;
+      }
+      .shell { width: min(100% - 2rem, 1080px); padding: 4rem 0; }
+      .topline { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 2rem; }
+      .brand { display: flex; align-items: center; gap: .7rem; font-size: .9rem; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+      .brand-mark { display: grid; place-items: center; width: 2.2rem; aspect-ratio: 1; border-radius: .7rem; color: #071426; background: linear-gradient(135deg, #5eead4, #60a5fa); }
+      .health { display: inline-flex; align-items: center; gap: .55rem; padding: .55rem .85rem; border: 1px solid #34d39966; border-radius: 99px; color: #a7f3d0; background: #064e3b55; font-size: .82rem; font-weight: 650; }
+      .dot { width: .55rem; height: .55rem; border-radius: 50%; background: #34d399; box-shadow: 0 0 1rem #34d399; }
+      main { position: relative; padding: clamp(2rem, 7vw, 5.5rem); overflow: hidden; border: 1px solid #ffffff1c; border-radius: 2rem; background: linear-gradient(135deg, #ffffff10, #ffffff04); box-shadow: 0 2rem 7rem #0006; }
+      main::after { content: ""; position: absolute; width: 22rem; height: 22rem; right: -8rem; top: -10rem; border: 1px solid #60a5fa33; border-radius: 50%; box-shadow: 0 0 0 2rem #60a5fa08, 0 0 0 4rem #60a5fa06; pointer-events: none; }
+      .eyebrow { color: #7dd3fc; font-size: .78rem; font-weight: 750; letter-spacing: .18em; text-transform: uppercase; }
+      h1 { max-width: 760px; margin: 1.25rem 0; font-size: clamp(2.5rem, 7vw, 5.6rem); line-height: .98; letter-spacing: -.065em; }
+      .word { display: inline-block; min-width: 5ch; color: #5eead4; background: linear-gradient(90deg, #5eead4, #60a5fa, #c084fc, #fb7185); background-size: 250% auto; background-clip: text; -webkit-text-fill-color: transparent; animation: gradient 5s linear infinite, reveal .55s ease both; }
+      .intro { max-width: 620px; color: #b7c7dc; font-size: clamp(1rem, 2vw, 1.2rem); line-height: 1.75; }
+      .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin-top: 3rem; }
+      .card { padding: 1.2rem; border: 1px solid #ffffff14; border-radius: 1rem; background: #07142680; }
+      .card span { display: block; margin-bottom: .55rem; color: #94a3b8; font-size: .76rem; letter-spacing: .1em; text-transform: uppercase; }
+      .card strong { color: #e2e8f0; font-size: 1rem; }
+      footer { display: flex; justify-content: space-between; gap: 1rem; margin-top: 1.25rem; color: #8fa2ba; font-size: .8rem; }
+      @keyframes gradient { to { background-position: 250% center; } }
+      @keyframes reveal { from { opacity: 0; transform: translateY(.35em); } to { opacity: 1; transform: translateY(0); } }
+      @media (max-width: 650px) { .topline { align-items: flex-start; flex-direction: column; } .cards { grid-template-columns: 1fr; margin-top: 2rem; } footer { flex-direction: column; } }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; } }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <div class="topline">
+        <div class="brand"><span class="brand-mark">E</span> Event-Driven Remediation</div>
+        <div class="health"><span class="dot"></span> Service healthy · monitored</div>
+      </div>
+      <main>
+        <div class="eyebrow">Event-Driven Remediation Service - healthy</div>
+        <h1>Keeping services <span class="word" id="dynamic-word">resilient.</span></h1>
+        <p class="intro">This demo container is serving its approved baseline. Prometheus monitors the page, and AWX can restore and verify it automatically when event-driven remediation is triggered.</p>
+        <section class="cards" aria-label="Automation workflow">
+          <div class="card"><span>01 · Detect</span><strong>Prometheus alert</strong></div>
+          <div class="card"><span>02 · Remediate</span><strong>Rulebook → AWX job</strong></div>
+          <div class="card"><span>03 · Verify</span><strong>Healthy response</strong></div>
+        </section>
+      </main>
+      <footer><span>Disposable Nginx web container</span><span>Event-driven remediation lab</span></footer>
+    </div>
+    <script>
+      const words = ["resilient.", "available.", "reliable.", "in sync."];
+      const word = document.getElementById("dynamic-word");
+      let index = 0;
+      window.setInterval(() => {
+        index = (index + 1) % words.length;
+        word.textContent = words[index];
+        word.style.animation = "none";
+        void word.offsetWidth;
+        word.style.animation = "gradient 5s linear infinite, reveal .55s ease both";
+      }, 2200);
+    </script>
+  </body>
+</html>
