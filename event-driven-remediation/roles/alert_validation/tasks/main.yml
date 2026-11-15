@@ -1,0 +1,34 @@
+---
+- name: Capture the event delivered by Ansible Rulebook
+  ansible.builtin.set_fact:
+    remediation_alert_event: "{{ ansible_eda.event | default({}) }}"
+
+- name: Extract the event payload
+  ansible.builtin.set_fact:
+    remediation_event_payload: "{{ remediation_alert_event.payload | default({}) }}"
+
+- name: Extract the first Alertmanager alert when present
+  ansible.builtin.set_fact:
+    remediation_alert_record: "{{ (remediation_event_payload.alerts | default([]) | first) | default({}) }}"
+
+- name: Normalize the incoming alert fields
+  ansible.builtin.set_fact:
+    alert_payload:
+      severity: "{{ remediation_event_payload.commonLabels.severity | default(remediation_event_payload.severity | default('')) }}"
+      status: "{{ remediation_event_payload.status | default('') }}"
+      alertname: "{{ remediation_event_payload.commonLabels.alertname | default(remediation_alert_record.labels.alertname | default(remediation_event_payload.alertname | default(''))) }}"
+      target: "{{ remediation_event_payload.commonLabels.target | default(remediation_alert_record.labels.target | default(remediation_event_payload.target | default(''))) }}"
+      event_id: "{{ remediation_alert_record.fingerprint | default(remediation_event_payload.event_id | default(remediation_event_payload.groupKey | default('unknown'))) }}"
+      description: "{{ remediation_alert_record.annotations.description | default(remediation_event_payload.description | default(remediation_event_payload.summary | default('Monitoring alert received'))) }}"
+      summary: "{{ remediation_alert_record.annotations.summary | default(remediation_event_payload.summary | default('Monitoring alert received')) }}"
+
+- name: Require a valid, allow-listed error event
+  ansible.builtin.assert:
+    that:
+      - alert_payload.severity == 'error'
+      - alert_payload.status == 'firing'
+      - alert_payload.target == expected_target
+      - alert_payload.alertname | length > 0
+      - alert_payload.event_id | length > 0
+    fail_msg: Refusing an incomplete, non-error, or non-allow-listed event.
+
