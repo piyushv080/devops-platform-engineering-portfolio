@@ -1,0 +1,3 @@
+---
+demo_http_url: http://host.docker.internal:8081/
+expected_page_marker: Event-Driven Remediation Service - healthy
