@@ -47,4 +47,3 @@
   when: >-
     demo_check.status | default(0) == 200 and
     expected_page_marker in (demo_check.content | default(''))
-

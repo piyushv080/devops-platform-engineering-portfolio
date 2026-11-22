@@ -34,7 +34,10 @@
   connection: local
   gather_facts: false
   vars:
-    automation_mode: "{{ 'lab' if lab_environment_action is defined else ('remediate' if (ansible_eda is defined and ansible_eda.event is defined) else 'audit') }}"
+    automation_mode: >-
+      {{ 'lab' if lab_environment_action is defined
+         else ('remediate' if (ansible_eda is defined and ansible_eda.event is defined)
+         else 'audit') }}
   roles:
     - role: alert_validation
       when: automation_mode == 'remediate'
@@ -46,7 +49,10 @@
   gather_facts: false
   become: true
   vars:
-    automation_mode: "{{ 'lab' if lab_environment_action is defined else ('remediate' if (ansible_eda is defined and ansible_eda.event is defined) else 'audit') }}"
+    automation_mode: >-
+      {{ 'lab' if lab_environment_action is defined
+         else ('remediate' if (ansible_eda is defined and ansible_eda.event is defined)
+         else 'audit') }}
     expected_target: web_container
     alert_event: "{{ hostvars['localhost']['remediation_alert_event'] }}"
     alert_payload: "{{ hostvars['localhost']['alert_payload'] }}"
@@ -63,7 +69,10 @@
   connection: local
   gather_facts: false
   vars:
-    automation_mode: "{{ 'lab' if lab_environment_action is defined else ('remediate' if (ansible_eda is defined and ansible_eda.event is defined) else 'audit') }}"
+    automation_mode: >-
+      {{ 'lab' if lab_environment_action is defined
+         else ('remediate' if (ansible_eda is defined and ansible_eda.event is defined)
+         else 'audit') }}
   roles:
     - role: service_audit
       when: automation_mode == 'audit'

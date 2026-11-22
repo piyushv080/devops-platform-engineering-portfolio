@@ -48,4 +48,3 @@
     - name: Fail the AWX job so the remediation failure is visible
       ansible.builtin.fail:
         msg: "Remediation or verification failed for {{ inventory_hostname }}. Incident {{ snow_incident_number }} remains open."
-
