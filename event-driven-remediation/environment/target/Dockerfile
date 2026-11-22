@@ -15,4 +15,4 @@ COPY index.html /usr/share/nginx/html/index.html
 
 EXPOSE 22 80
 
-CMD ["sh", "-c", "ssh-keygen -A && /usr/sbin/sshd && exec nginx -g 'daemon off;'"]
+CMD ["sh", "-c", "install -o ansible -g ansible -m 600 /run/ssh-keys/authorized_keys /home/ansible/.ssh/authorized_keys && ssh-keygen -A && /usr/sbin/sshd && exec nginx -g 'daemon off;'"]

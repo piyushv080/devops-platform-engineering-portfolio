@@ -7,7 +7,9 @@ services:
       - "127.0.0.1:8081:80"
       - "2222:22"
     volumes:
-      - ../secrets/authorized_keys:/home/ansible/.ssh/authorized_keys:ro
+      # Mounted to a staging path; the container copies it into place owned by
+      # the ansible user, so it works whatever the host user's UID is.
+      - ../secrets/authorized_keys:/run/ssh-keys/authorized_keys:ro
     restart: unless-stopped
 
   blackbox-exporter:
