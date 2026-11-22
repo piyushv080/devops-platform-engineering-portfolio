@@ -50,6 +50,26 @@ services:
       - alertmanager-data:/alertmanager
     restart: unless-stopped
 
+  grafana:
+    image: grafana/grafana-oss:12.0.0
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana-admin-password
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/event-driven-remediation.json
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ../secrets/grafana-admin-password:/run/secrets/grafana-admin-password:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
   # Keep the webhook listener on the same Compose network as Alertmanager.
   # This avoids routing container traffic through the WSL/Windows host boundary.
   rulebook:
@@ -69,3 +89,4 @@ services:
 volumes:
   prometheus-data:
   alertmanager-data:
+  grafana-data:
