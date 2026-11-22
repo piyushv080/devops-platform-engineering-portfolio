@@ -12,11 +12,13 @@
   ansible.builtin.set_fact:
     incident_correlation_id: "{{ alert_payload.alertname | default('unknown') }}:{{ alert_payload.target | default('unknown') }}"
 
-- name: Find an active incident already correlated to this alert
+- name: Find an open incident already correlated to this alert
+  # Resolved (6) incidents stay active=true in ServiceNow, so also require
+  # state < 6 (New, In Progress, On Hold). Each new outage gets a new incident.
   ansible.builtin.uri:
     # The developer instance returns HTTP 500 when sysparm_fields is combined
     # with this filter. The same filtered request succeeds without that option.
-    url: "{{ snow_url }}/api/now/table/incident?sysparm_query=correlation_id%3D{{ incident_correlation_id | urlencode }}%5Eactive%3Dtrue&sysparm_limit=1"
+    url: "{{ snow_url }}/api/now/table/incident?sysparm_query=correlation_id%3D{{ incident_correlation_id | urlencode }}%5Eactive%3Dtrue%5Estate%3C6&sysparm_limit=1"
     method: GET
     user: "{{ snow_user }}"
     password: "{{ snow_password }}"
