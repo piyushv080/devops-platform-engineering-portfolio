@@ -1,0 +1,7 @@
+---
+# Shared variables such as alert_payload, expected_target, and snow_* are an
+# intentional contract between the playbook, roles, and the AWX credential that
+# injects snow_url/snow_user/snow_password. Prefixing them per role would break
+# that contract, so the role-prefix naming rule is skipped for this project.
+skip_list:
+  - var-naming[no-role-prefix]
