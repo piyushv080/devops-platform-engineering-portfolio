@@ -1,0 +1,177 @@
+{
+  "uid": "event-driven-remediation",
+  "title": "Event-Driven Remediation",
+  "tags": ["demo", "awx", "servicenow"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Demo site status",
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "probe_success{job=\"nginx-web-check\"}", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": {
+              "0": { "text": "DOWN / DRIFT", "color": "red", "index": 0 },
+              "1": { "text": "HEALTHY", "color": "green", "index": 1 }
+            } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": null },
+            { "color": "green", "value": 1 }
+          ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Alert: DemoServiceDrift",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "count(ALERTS{alertname=\"DemoServiceDrift\",alertstate=\"firing\"}) or vector(0)", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            { "type": "value", "options": {
+              "0": { "text": "No alert", "color": "green", "index": 0 },
+              "1": { "text": "FIRING", "color": "red", "index": 1 }
+            } }
+          ],
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "red", "value": 1 }
+          ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "HTTP status code",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "probe_http_status_code{job=\"nginx-web-check\"}", "instant": true }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0,
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "red", "value": null },
+            { "color": "green", "value": 200 },
+            { "color": "red", "value": 300 }
+          ] }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "state-timeline",
+      "title": "Site health timeline (red = detected, green = recovered)",
+      "gridPos": { "x": 0, "y": 7, "w": 24, "h": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "probe_success{job=\"nginx-web-check\"}", "legendFormat": "demo site" },
+        { "refId": "B", "expr": "count(ALERTS{alertname=\"DemoServiceDrift\",alertstate=\"firing\"}) or vector(0)", "legendFormat": "alert firing" }
+      ],
+      "options": {
+        "showValue": "never",
+        "mergeValues": true,
+        "rowHeight": 0.8,
+        "legend": { "showLegend": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "demo site" },
+            "properties": [
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [
+                { "color": "red", "value": null },
+                { "color": "green", "value": 1 }
+              ] } },
+              { "id": "mappings", "value": [ { "type": "value", "options": {
+                "0": { "text": "DOWN / DRIFT", "index": 0 },
+                "1": { "text": "HEALTHY", "index": 1 }
+              } } ] }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "alert firing" },
+            "properties": [
+              { "id": "thresholds", "value": { "mode": "absolute", "steps": [
+                { "color": "transparent", "value": null },
+                { "color": "orange", "value": 1 }
+              ] } },
+              { "id": "mappings", "value": [ { "type": "value", "options": {
+                "0": { "text": "quiet", "index": 0 },
+                "1": { "text": "FIRING", "index": 1 }
+              } } ] }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Probe response time",
+      "gridPos": { "x": 0, "y": 13, "w": 24, "h": 7 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        { "refId": "A", "expr": "probe_duration_seconds{job=\"nginx-web-check\"}", "legendFormat": "response time" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "lineWidth": 2, "fillOpacity": 10, "showPoints": "never" }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single" }
+      }
+    }
+  ]
+}
