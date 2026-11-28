@@ -1,0 +1,6 @@
+---
+demo_http_url: "{{ lookup('env', 'DEMO_HTTP_URL') | default('http://host.docker.internal:8081/', true) }}"
+event_webhook_url: "{{ lookup('env', 'EVENT_WEBHOOK_URL') | default('http://host.docker.internal:5000/endpoint', true) }}"
+event_webhook_token: "{{ lookup('env', 'EDA_WEBHOOK_TOKEN') }}"
+expected_page_marker: Event-Driven Remediation Service - healthy
+audit_target_name: web_container
